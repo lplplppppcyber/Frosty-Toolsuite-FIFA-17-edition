@@ -31,6 +31,7 @@ using System.Windows;
 [assembly: PluginValidForProfile((int)ProfileVersion.Fifa19)]
 [assembly: PluginValidForProfile((int)ProfileVersion.Fifa20)]
 [assembly: PluginValidForProfile((int)ProfileVersion.Madden20)]
+[assembly: PluginValidForProfile((int)ProfileVersion.Fc26)]
 
 [assembly: RegisterAssetDefinition("XML", typeof(TextAssetDefinition))]
 [assembly: RegisterAssetDefinition("TXT", typeof(TextAssetDefinition))]

@@ -30,5 +30,6 @@ using System.Windows;
 [assembly: PluginValidForProfile((int)ProfileVersion.Fifa18)]
 [assembly: PluginValidForProfile((int)ProfileVersion.Fifa19)]
 [assembly: PluginValidForProfile((int)ProfileVersion.Fifa20)]
+[assembly: PluginValidForProfile((int)ProfileVersion.Fc26)]
 
 [assembly: RegisterLocalizedStringDatabase(typeof(LegacyLocalizedStringDatabase))]
