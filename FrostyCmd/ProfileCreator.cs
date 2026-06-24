@@ -976,6 +976,34 @@ namespace FrostyCmd
         {
         }
 
+        private void CreateFC26Profile()
+        {
+            string key = "FC26";
+            using (NativeWriter writer = new NativeWriter(new MemoryStream()))
+            {
+                writer.WriteObfuscatedString("EA SPORTS FC™ 26");
+                writer.Write((int)ProfileVersion.Fc26);
+                writer.WriteObfuscatedString("fc26");
+                writer.WriteObfuscatedString(typeof(NullDeobfuscator).Name);
+                writer.WriteObfuscatedString(AssetManager.GetLoaderName("FifaAssetLoader"));
+                writer.Write(CreateSources("Patch;false", "Update;true", "Data;false"));
+                writer.WriteObfuscatedString("FC26SDK");
+                writer.Write(CreateBanner("FC26"));
+                writer.WriteObfuscatedString("content/Common/textures/debug/debug_texture_color");
+                writer.WriteObfuscatedString("content/Common/textures/debug/debug_texture_normal");
+                writer.WriteObfuscatedString("content/Common/textures/debug/debug_texture_coeff");
+                writer.WriteObfuscatedString("content/Common/textures/debug/debug_texture_alpha");
+                writer.Write(0); // shared bundle names
+                writer.Write(0); // ignored res types
+
+                // Flags (MustAddChunks, EbxVersion, RequiresKey)
+                ProfileFlags pf = new ProfileFlags(0, 5, 1);
+                pf.Write(writer);
+
+                blobs.Add(key, writer.ToByteArray());
+            }
+        }
+
         public void CreateProfiles()
         {
             CreateDAProfile();
@@ -1002,6 +1030,7 @@ namespace FrostyCmd
             CreateNFSHeatProfile();
             CreateBFHProfile();
             CreateSWSProfile();
+            CreateFC26Profile();
 
 #if FROSTY_DEVELOPER
 
