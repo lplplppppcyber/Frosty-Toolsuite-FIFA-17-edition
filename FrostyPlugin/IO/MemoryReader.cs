@@ -195,6 +195,13 @@ namespace Frosty.Core.IO
                 {
                     pos = Position;
                     buf = ReadBytes(1024 * 1024);
+                    // Skip unreadable gaps rather than stopping the scan entirely
+                    while (buf == null && position < startAddress + (512L * 1024 * 1024))
+                    {
+                        position += 1024 * 1024;
+                        pos = position;
+                        buf = ReadBytes(1024 * 1024);
+                    }
                     if (buf == null)
                         break;
 

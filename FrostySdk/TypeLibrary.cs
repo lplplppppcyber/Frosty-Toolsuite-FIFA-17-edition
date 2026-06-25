@@ -674,10 +674,19 @@ namespace FrostySdk
         {
             if (existingAssembly == null)
                 return 0;
-            var attr = existingAssembly.GetCustomAttribute<SdkVersionAttribute>();
-            if (attr == null)
+            try
+            {
+                var attr = existingAssembly.GetCustomAttribute<SdkVersionAttribute>();
+                if (attr == null)
+                    return 0;
+                return (uint)attr.Version;
+            }
+            catch
+            {
+                // SDK targets an incompatible runtime (e.g. .NET 9 DLL loaded in .NET 4.8)
+                existingAssembly = null;
                 return 0;
-            return (uint)attr.Version;
+            }
         }
 
         public static DbObject LoadClassesSDK(Stream sdkStream)
