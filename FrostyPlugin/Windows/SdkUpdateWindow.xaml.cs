@@ -207,31 +207,41 @@ namespace Frosty.Core.Windows
             if (offsets == null || offsets.Count == 0)
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
-                task.FailMessage = "Unable to find the first type info offset";
+                task.FailMessage = "Pattern not found in game memory. Ensure the game is fully loaded and (for FC26) launched without anti-cheat.";
                 return false;
             }
 
-            // Sort matches and try each until we find a non-zero TypeInfo pointer
+            // Sort matches and try each until we find a non-zero TypeInfo pointer.
+            // Retry up to ~30s for games that initialise TypeInfo after the main window appears.
             List<long> sortedOffsets = new List<long>(offsets);
             sortedOffsets.Sort();
             updateState.TypeInfoOffset = 0;
-            foreach (long off in sortedOffsets)
+
+            for (int attempt = 0; attempt < 30 && updateState.TypeInfoOffset == 0; attempt++)
             {
-                reader.Position = off + 3;
-                int newValue = reader.ReadInt();
-                reader.Position = off + 3 + newValue + 4;
-                long candidate = reader.ReadLong();
-                if (candidate != 0)
+                foreach (long off in sortedOffsets)
                 {
-                    updateState.TypeInfoOffset = candidate;
-                    break;
+                    reader.Position = off + 3;
+                    int newValue = reader.ReadInt();
+                    reader.Position = off + 3 + newValue + 4;
+                    long candidate = reader.ReadLong();
+                    if (candidate != 0)
+                    {
+                        updateState.TypeInfoOffset = candidate;
+                        break;
+                    }
+                }
+                if (updateState.TypeInfoOffset == 0)
+                {
+                    task.StatusMessage = string.Format("Waiting for TypeInfo to initialise (attempt {0}/30)...", attempt + 1);
+                    System.Threading.Thread.Sleep(1000);
                 }
             }
 
             if (updateState.TypeInfoOffset == 0)
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
-                task.FailMessage = "Unable to find the first type info offset";
+                task.FailMessage = "Pattern found but TypeInfo pointer is null after 30s. Game may still be loading or TypeInfo not yet registered.";
                 return false;
             }
 
