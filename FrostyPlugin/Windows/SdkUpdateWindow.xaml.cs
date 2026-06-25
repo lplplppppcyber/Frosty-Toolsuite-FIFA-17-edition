@@ -178,12 +178,16 @@ namespace Frosty.Core.Windows
                 return false;
             }
 
-            string[] patterns = new string[]
-            {
-                "488b05???????? 48894108 48890d???????? 48???? C3",
-                "488b05???????? 48894108 48890d????????",
-                "488b05???????? 488905???????? 488d05???????? 488905???????? E9"
-            };
+            // FC26/FC25 use a different TypeInfo registration code pattern
+            bool isFc26 = ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26;
+            string[] patterns = isFc26
+                ? new string[] { "48 39 1D ?? ?? ?? ?? ?? ?? 48 8b 43 10" }
+                : new string[]
+                {
+                    "488b05???????? 48894108 48890d???????? 48???? C3",
+                    "488b05???????? 48894108 48890d????????",
+                    "488b05???????? 488905???????? 488d05???????? 488905???????? E9"
+                };
 
             IList<long> offsets = null;
             foreach (var pattern in patterns)
@@ -194,17 +198,36 @@ namespace Frosty.Core.Windows
                     break;
             }
 
-            if (offsets.Count == 0)
+            if (offsets == null || offsets.Count == 0)
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
                 task.FailMessage = "Unable to find the first type info offset";
                 return false;
             }
 
-            reader.Position = offsets[0] + 3;
-            int newValue = reader.ReadInt();
-            reader.Position = offsets[0] + 3 + newValue + 4;
-            updateState.TypeInfoOffset = reader.ReadLong();
+            // Sort matches and try each until we find a non-zero TypeInfo pointer
+            List<long> sortedOffsets = new List<long>(offsets);
+            sortedOffsets.Sort();
+            updateState.TypeInfoOffset = 0;
+            foreach (long off in sortedOffsets)
+            {
+                reader.Position = off + 3;
+                int newValue = reader.ReadInt();
+                reader.Position = off + 3 + newValue + 4;
+                long candidate = reader.ReadLong();
+                if (candidate != 0)
+                {
+                    updateState.TypeInfoOffset = candidate;
+                    break;
+                }
+            }
+
+            if (updateState.TypeInfoOffset == 0)
+            {
+                task.State = SdkUpdateTaskState.CompletedFail;
+                task.FailMessage = "Unable to find the first type info offset";
+                return false;
+            }
 
             task.State = SdkUpdateTaskState.CompletedSuccessful;
             task.StatusMessage = string.Format("0x{0}", updateState.TypeInfoOffset.ToString("X8"));
