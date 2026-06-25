@@ -14,7 +14,7 @@ namespace Frosty.Core.IO
 
     public class MemoryReader : IDisposable
     {
-        private const int PROCESS_WM_READ = 0x0010 | 0x0008 | 0x0400; // VM_READ | VM_OPERATION | QUERY_INFORMATION
+        private const int PROCESS_WM_READ = 0x0010; // PROCESS_VM_READ
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
@@ -131,14 +131,10 @@ namespace Frosty.Core.IO
         public byte[] ReadBytes(int numBytes)
         {
             byte[] outBuffer = new byte[numBytes];
-
-            uint oldProtect = 0;
             int bytesRead = 0;
 
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 0x02, ref oldProtect);
             if (!ReadProcessMemory(handle, position, outBuffer, numBytes, ref bytesRead))
                 return null;
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
 
             position += numBytes;
             return outBuffer;
@@ -216,13 +212,8 @@ namespace Frosty.Core.IO
 
         protected virtual void FillBuffer(int numBytes)
         {
-            uint oldProtect = 0;
             int bytesRead = 0;
-
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 0x02, ref oldProtect);
             ReadProcessMemory(handle, position, buffer, numBytes, ref bytesRead);
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
-
             position += numBytes;
         }
     }
