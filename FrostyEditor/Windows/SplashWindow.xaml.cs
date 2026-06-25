@@ -106,7 +106,7 @@ namespace FrostyEditor.Windows
             await LoadData(logger, KeyManager.Instance.GetKey("Key1"), result);
 
             // check to make sure SDK is up to date
-            if (TypeLibrary.GetSdkVersion() != App.FileSystem.Head)
+            if (TypeLibrary.GetSdkVersion() == 0 || TypeLibrary.GetSdkVersion() != App.FileSystem.Head)
             {
                 // requires updating
                 SdkUpdateWindow sdkWin = new SdkUpdateWindow(this);

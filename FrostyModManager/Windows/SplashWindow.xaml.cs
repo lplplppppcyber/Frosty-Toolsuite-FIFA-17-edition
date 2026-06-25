@@ -110,7 +110,7 @@ namespace FrostyModManager.Windows
                 // load data from game or cache
                 await LoadData(logger);
 
-                if (TypeLibrary.GetSdkVersion() != Frosty.Core.App.FileSystem.Head)
+                if (TypeLibrary.GetSdkVersion() == 0 || TypeLibrary.GetSdkVersion() != Frosty.Core.App.FileSystem.Head)
                 {
                     // requires updating
                     SdkUpdateWindow sdkWin = new SdkUpdateWindow(this);
