@@ -87,6 +87,8 @@ namespace FrostySdk.IO
                 buffer = DecompressOodle(bufferSize, decompressedSize, unobfuscate);
             else if (compressionType == 0x15) // Oodle (v4)
                 buffer = DecompressOodle(bufferSize, decompressedSize, unobfuscate);
+            else if (compressionType == 0x19) // Oodle (v9)
+                buffer = DecompressOodle(bufferSize, decompressedSize, unobfuscate);
 
             return buffer;
         }
