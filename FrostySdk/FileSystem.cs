@@ -398,27 +398,12 @@ namespace FrostySdk
             FC26TocReader tocReader = new FC26TocReader();
             DbObject baseLayout = tocReader.Read(baseLayoutPath);
 
-            DbObject baseSbs = baseLayout.GetValue<DbObject>("superBundles");
-            if (baseSbs != null)
-            {
-                foreach (DbObject sb in baseSbs)
-                    superBundles.Add(sb.GetValue<string>("name").ToLower());
-            }
+            // FC26 layout.toc "superBundles" has a different structure (Object with Sha1 values).
+            // SuperBundle names are instead sourced from each installChunk's "superBundles" list.
 
             if (patchLayoutPath != "")
             {
                 DbObject patchLayout = tocReader.Read(patchLayoutPath);
-
-                DbObject patchSbs = patchLayout.GetValue<DbObject>("superBundles");
-                if (patchSbs != null)
-                {
-                    foreach (DbObject sb in patchSbs)
-                    {
-                        string sbName = sb.GetValue<string>("name").ToLower();
-                        if (!superBundles.Contains(sbName))
-                            superBundles.Add(sbName);
-                    }
-                }
 
                 Base = (uint)patchLayout.GetValue<int>("base");
                 Head = (uint)patchLayout.GetValue<int>("head");
@@ -474,7 +459,12 @@ namespace FrostySdk
                     if (sbList != null)
                     {
                         foreach (string sbName in sbList)
-                            info.SuperBundles[sbName.ToLower()] = false;
+                        {
+                            string lower = sbName.ToLower();
+                            info.SuperBundles[lower] = false;
+                            if (!superBundles.Contains(lower))
+                                superBundles.Add(lower);
+                        }
                     }
 
                     DbObject splitSbs = installChunk.GetValue<DbObject>("splitSuperBundles");
