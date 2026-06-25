@@ -37,8 +37,8 @@ namespace FC26ProfilePlugin
                 DefaultTint = "",
                 Sources = new List<FileSystemSource>
                 {
-                    new FileSystemSource { Path = "Data", SubDirs = false },
-                    new FileSystemSource { Path = "Patch", SubDirs = false }
+                    new FileSystemSource { Path = "Patch", SubDirs = false },
+                    new FileSystemSource { Path = "Data", SubDirs = false }
                 },
                 SharedBundles = new Dictionary<int, string>(),
                 IgnoredResTypes = new List<uint>(),
