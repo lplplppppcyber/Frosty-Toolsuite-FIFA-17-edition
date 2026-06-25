@@ -23,7 +23,7 @@ namespace FC26ProfilePlugin
                 DataVersion = (int)ProfileVersion.FC26,
                 CacheName = "fc26",
                 Deobfuscator = "NullDeobfuscator",
-                AssetLoader = "FifaAssetLoader",
+                AssetLoader = "FC26AssetLoader",
                 SDKFilename = "FC26SDK",
                 EbxVersion = 4,
                 RequiresKey = false,

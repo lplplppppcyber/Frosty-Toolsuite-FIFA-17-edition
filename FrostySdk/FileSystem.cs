@@ -92,6 +92,7 @@ namespace FrostySdk
         private Dictionary<string, byte[]> memoryFs = new Dictionary<string, byte[]>();
         private List<string> casFiles = new List<string>();
         private readonly Type deobfuscatorType;
+        private Dictionary<uint, int> fnv1CatalogMap = new Dictionary<uint, int>();
 
         public FileSystem(string inBasePath)
         {
@@ -257,6 +258,9 @@ namespace FrostySdk
             return ((patch) ? "native_patch/" : "native_data/") + ci.Name + "/cas_" + cas.ToString("D2") + ".cas";
         }
 
+        public int GetCatalogIndexFromFNV1(uint fnv1) =>
+            fnv1CatalogMap.TryGetValue(fnv1, out int idx) ? idx : -1;
+
         private void LoadInitfs(byte[] key, bool patched = true)
         {
             string path = ResolvePath((patched ? "" : "native_data/") + "initfs_win32");
@@ -324,6 +328,12 @@ namespace FrostySdk
 
         private void ProcessLayouts()
         {
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+            {
+                ProcessLayoutsFC26();
+                return;
+            }
+
             string baseLayoutPath = ResolvePath("native_data/layout.toc");
             string patchLayoutPath = ResolvePath("native_patch/layout.toc");
 
@@ -377,6 +387,124 @@ namespace FrostySdk
 
                 ProcessCatalogs(baseLayout);
                 ProcessManifest(baseLayout);
+            }
+        }
+
+        private void ProcessLayoutsFC26()
+        {
+            string baseLayoutPath  = ResolvePath("native_data/layout.toc");
+            string patchLayoutPath = ResolvePath("native_patch/layout.toc");
+
+            FC26TocReader tocReader = new FC26TocReader();
+            DbObject baseLayout = tocReader.Read(baseLayoutPath);
+
+            DbObject baseSbs = baseLayout.GetValue<DbObject>("superBundles");
+            if (baseSbs != null)
+            {
+                foreach (DbObject sb in baseSbs)
+                    superBundles.Add(sb.GetValue<string>("name").ToLower());
+            }
+
+            if (patchLayoutPath != "")
+            {
+                DbObject patchLayout = tocReader.Read(patchLayoutPath);
+
+                DbObject patchSbs = patchLayout.GetValue<DbObject>("superBundles");
+                if (patchSbs != null)
+                {
+                    foreach (DbObject sb in patchSbs)
+                    {
+                        string sbName = sb.GetValue<string>("name").ToLower();
+                        if (!superBundles.Contains(sbName))
+                            superBundles.Add(sbName);
+                    }
+                }
+
+                Base = (uint)patchLayout.GetValue<int>("base");
+                Head = (uint)patchLayout.GetValue<int>("head");
+
+                ProcessCatalogsFC26(patchLayout);
+            }
+            else
+            {
+                Base = (uint)baseLayout.GetValue<int>("base");
+                Head = (uint)baseLayout.GetValue<int>("head");
+
+                ProcessCatalogsFC26(baseLayout);
+            }
+        }
+
+        private void ProcessCatalogsFC26(DbObject layout)
+        {
+            DbObject installManifest = layout.GetValue<DbObject>("installManifest");
+            if (installManifest == null)
+            {
+                CatalogInfo ci = new CatalogInfo() { Name = "" };
+                foreach (string sbName in superBundles)
+                    ci.SuperBundles.Add(sbName, false);
+                catalogs.Add(ci);
+                return;
+            }
+
+            DbObject installChunks = installManifest.GetValue<DbObject>("installChunks");
+            if (installChunks == null)
+                return;
+
+            foreach (DbObject installChunk in installChunks)
+            {
+                if (installChunk.GetValue<bool>("testDLC"))
+                    continue;
+
+                bool alwaysInstalled = installChunk.GetValue<bool>("alwaysInstalled");
+                string path = "win32/" + installChunk.GetValue<string>("name");
+
+                Guid catalogId = installChunk.GetValue<Guid>("id");
+
+                CatalogInfo info = catalogs.Find((CatalogInfo ci) => ci.Id == catalogId);
+                if (info == null)
+                {
+                    info = new CatalogInfo
+                    {
+                        Id             = catalogId,
+                        Name           = path,
+                        AlwaysInstalled = alwaysInstalled
+                    };
+
+                    DbObject sbList = installChunk.GetValue<DbObject>("superBundles");
+                    if (sbList != null)
+                    {
+                        foreach (string sbName in sbList)
+                            info.SuperBundles[sbName.ToLower()] = false;
+                    }
+
+                    DbObject splitSbs = installChunk.GetValue<DbObject>("splitSuperBundles");
+                    if (splitSbs != null)
+                    {
+                        foreach (DbObject sbc in splitSbs)
+                        {
+                            string sbName = sbc.GetValue<string>("superBundle").ToLower();
+                            if (!info.SuperBundles.ContainsKey(sbName))
+                                info.SuperBundles[sbName] = true;
+                        }
+                    }
+
+                    DbObject splitTocs = installChunk.GetValue<DbObject>("splitTocs");
+                    if (splitTocs != null)
+                    {
+                        foreach (DbObject sbc in splitTocs)
+                        {
+                            string sbName = "win32/" + sbc.GetValue<string>("superbundle").ToLower();
+                            if (!info.SuperBundles.ContainsKey(sbName))
+                                info.SuperBundles[sbName] = true;
+                        }
+                    }
+                }
+
+                // Map FNV1 persistentIndex to catalog list position
+                int persistentIndex = installChunk.GetValue<int>("persistentIndex");
+                fnv1CatalogMap[(uint)persistentIndex] = catalogs.Count;
+
+                catalogs.Add(info);
             }
         }
 

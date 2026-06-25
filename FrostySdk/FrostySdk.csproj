@@ -104,6 +104,8 @@
     <Compile Include="IO\CasReader.cs" />
     <Compile Include="IO\CatReader.cs" />
     <Compile Include="IO\DbReader.cs" />
+    <Compile Include="IO\FC26HuffmanDecoder.cs" />
+    <Compile Include="IO\FC26TocReader.cs" />
     <Compile Include="IO\DbWriter.cs" />
     <Compile Include="IO\EbxReader.cs" />
     <Compile Include="IO\EbxWriter.cs" />
@@ -116,6 +118,7 @@
     <Compile Include="Managers\Loaders\EdgeAssetLoader.cs" />
     <Compile Include="Managers\Loaders\AnthemAssetLoader.cs" />
     <Compile Include="Managers\Loaders\PVZAssetLoader.cs" />
+    <Compile Include="Managers\Loaders\FC26AssetLoader.cs" />
     <Compile Include="Managers\Loaders\FifaAssetLoader.cs" />
     <Compile Include="Managers\Loaders\LegacyAssetLoader.cs" />
     <Compile Include="Managers\Loaders\ManifestAssetLoader.cs" />
