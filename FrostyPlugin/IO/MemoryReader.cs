@@ -14,7 +14,7 @@ namespace Frosty.Core.IO
 
     public class MemoryReader : IDisposable
     {
-        private const int PROCESS_WM_READ = 0x0010;
+        private const int PROCESS_WM_READ = 0x0010 | 0x0008 | 0x0400; // VM_READ | VM_OPERATION | QUERY_INFORMATION
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
