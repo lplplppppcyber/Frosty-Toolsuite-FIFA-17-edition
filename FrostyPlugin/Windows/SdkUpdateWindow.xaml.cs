@@ -106,9 +106,19 @@ namespace Frosty.Core.Windows
 
         private void FinishButton_Click(object sender, RoutedEventArgs e)
         {
-            Application.Current.Shutdown();
-            DialogResult = true;
-            Close();
+            if (failedTask == null)
+            {
+                // SDK generated successfully — must restart for the new DLL to load
+                DialogResult = true;
+                Close();
+                Application.Current.Shutdown();
+            }
+            else
+            {
+                // SDK generation failed — close the dialog so the user can still use the asset tree
+                DialogResult = false;
+                Close();
+            }
         }
 
         /// <summary>
@@ -241,7 +251,11 @@ namespace Frosty.Core.Windows
             if (updateState.TypeInfoOffset == 0)
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
-                task.FailMessage = "Pattern found but TypeInfo pointer is null after 30s. Game may still be loading or TypeInfo not yet registered.";
+                task.FailMessage = isFc26
+                    ? "FC26 SDK generation failed: EA Anti-Cheat (EAAC) blocks reading the TypeInfo pointer from game memory. " +
+                      "The SDK cannot be generated while EAAC is running.\n\n" +
+                      "You can still use the asset tree to browse bundles and assets — click Finish to continue."
+                    : "Pattern found but TypeInfo pointer is null after 30s. Game may still be loading or TypeInfo not yet registered.";
                 return false;
             }
 
