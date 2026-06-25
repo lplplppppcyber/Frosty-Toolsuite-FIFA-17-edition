@@ -79,7 +79,7 @@ namespace FrostySdk.Managers
 
                         string sbPath = sbName;
                         if (catalog.SuperBundles[sbName])
-                            sbPath = sbName.Replace("win32", catalog.Name, StringComparison.OrdinalIgnoreCase);
+                            sbPath = sbName.Replace("win32", catalog.Name);
 
                         string patchToc = parent.fs.ResolvePath("native_patch/" + sbPath + ".toc");
                         string baseToc  = parent.fs.ResolvePath("native_data/"  + sbPath + ".toc");
