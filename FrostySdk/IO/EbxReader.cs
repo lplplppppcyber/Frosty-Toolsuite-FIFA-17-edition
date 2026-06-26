@@ -894,13 +894,11 @@ namespace FrostySdk.IO
 
                 if (isArray)
                 {
-                    EbxClass arrayType = GetClass(classType, fieldType.ClassRef);
-                    var arrayField = GetField(arrayType, arrayType.FieldIndex);
-
                     if (riff)
                     {
                         // RIFF arrays are stored inline: a relative offset to the array data,
-                        // with the element count immediately preceding it.
+                        // with the element count immediately preceding it. The element type is
+                        // the field's own DebugType/ClassRef (array-ness is a TypeCategory flag).
                         long pos = Position;
                         int relOffset = ReadInt();
                         Position += relOffset - 4;
@@ -910,19 +908,21 @@ namespace FrostySdk.IO
                         catch (Exception) { }
                         for (int i = 0; i < count; i++)
                         {
-                            object value = ReadField(arrayType, arrayField.DebugType, arrayField.ClassRef, (attr != null));
+                            object value = ReadField(classType, fieldType.DebugType, fieldType.ClassRef, (attr != null));
                             if (fieldProp != null)
                             {
                                 try { fieldProp.GetValue(obj).GetType().GetMethod("Add").Invoke(fieldProp.GetValue(obj), new object[] { value }); }
                                 catch (Exception) { }
                             }
-                            if (arrayField.DebugType == EbxFieldType.Pointer || arrayField.DebugType == EbxFieldType.CString)
+                            if (fieldType.DebugType == EbxFieldType.Pointer || fieldType.DebugType == EbxFieldType.CString)
                                 Pad(8);
                         }
                         Position = pos;
                     }
                     else
                     {
+                        EbxClass arrayType = GetClass(classType, fieldType.ClassRef);
+                        var arrayField = GetField(arrayType, arrayType.FieldIndex);
                         int index = ReadInt();
                         EbxArray array = arrays[index];
                         long arrayPos = Position;
@@ -1873,7 +1873,10 @@ namespace FrostySdk.IO
             }
             else
             {
-                int idx = (short)index + ((classType.HasValue) ? classType.Value.Index : 0);
+                // RIFF ClassRefs are absolute std indices; legacy adds the parent class Index.
+                int idx = magic == EbxVersion.Riff
+                    ? index
+                    : (short)index + classType.Value.Index;
                 guid = std.GetGuid(idx);
 
                 if (classType.Value.SecondSize == 1)
