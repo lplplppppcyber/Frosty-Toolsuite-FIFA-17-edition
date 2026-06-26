@@ -48,7 +48,8 @@ namespace FrostySdk.IO
     internal enum EbxVersion
     {
         Version2 = 0x0FB2D1CE,
-        Version4 = 0x0FB4D1CE
+        Version4 = 0x0FB4D1CE,
+        Riff     = 0x46464952  // "RIFF" — FC26 EBX container
     }
 
     public struct EbxField
@@ -61,6 +62,8 @@ namespace FrostySdk.IO
         public uint SecondOffset;
 
         public EbxFieldType DebugType => (EbxFieldType)((Type >> 4) & 0x1F);
+        // FC26 RIFF type category (None=0, Pointer=1, Struct=2, Primitive=3, Array=4, Enum=5, ...).
+        public int TypeCategory => Type & 0xF;
     }
 
     public struct EbxClass
@@ -91,6 +94,8 @@ namespace FrostySdk.IO
         public int ClassRef;
         public uint Offset;
         public uint Count;
+        public ushort TypeFlags; // FC26 RIFF
+        public uint PathDepth;   // FC26 RIFF
     }
 
     public struct EbxBoxedValue
@@ -840,6 +845,7 @@ namespace FrostySdk.IO
                 return null;
             }
             Type objType = obj.GetType();
+            bool riff = magic == EbxVersion.Riff;
 
             for (int j = 0; j < classType.FieldCount; j++)
             {
@@ -852,7 +858,17 @@ namespace FrostySdk.IO
 
                 if (fieldType.DebugType == EbxFieldType.Inherited)
                 {
+                    // RIFF: inherited fields share the same absolute base offset.
                     ReadClass(GetClass(classType, fieldType.ClassRef), obj, startOffset);
+                    continue;
+                }
+
+                bool isArray = riff ? (fieldType.TypeCategory == 4) : (fieldType.DebugType == EbxFieldType.Array);
+
+                if (riff)
+                {
+                    // Absolute field positioning from the shared type descriptor offset.
+                    Position = startOffset + fieldType.DataOffset;
                 }
                 else
                 {
@@ -864,37 +880,51 @@ namespace FrostySdk.IO
                         || fieldType.DebugType == EbxFieldType.Int64
                         || fieldType.DebugType == EbxFieldType.Float64)
                     {
-                        // Structure alignment
-                        while (Position % 8 != 0)
-                            Position++;
+                        while (Position % 8 != 0) Position++;
                     }
-                    else if (fieldType.DebugType == EbxFieldType.Array
-                        || fieldType.DebugType == EbxFieldType.Pointer)
+                    else if (fieldType.DebugType == EbxFieldType.Array || fieldType.DebugType == EbxFieldType.Pointer)
                     {
-                        while (Position % 4 != 0)
-                            Position++;
+                        while (Position % 4 != 0) Position++;
                     }
+                }
 
-                    // @temp
-                    //if (fieldType.DebugType != EbxFieldType.Struct)
-                    //{
-                    //    if ((Position - startOffset) != fieldType.DataOffset)
-                    //        Console.WriteLine("Offset misalignment: " + fieldType.DebugType);
-                    //}
+                if (isArray)
+                {
+                    EbxClass arrayType = GetClass(classType, fieldType.ClassRef);
+                    var arrayField = GetField(arrayType, arrayType.FieldIndex);
 
-                    if (fieldType.DebugType == EbxFieldType.Array)
+                    if (riff)
                     {
-                        EbxClass arrayType = GetClass(classType, fieldType.ClassRef);
-
+                        // RIFF arrays are stored inline: a relative offset to the array data,
+                        // with the element count immediately preceding it.
+                        long pos = Position;
+                        int relOffset = ReadInt();
+                        Position += relOffset - 4;
+                        Position -= 4;
+                        uint count = ReadUInt();
+                        try { fieldProp?.GetValue(obj).GetType().GetMethod("Clear").Invoke(fieldProp.GetValue(obj), new object[] { }); }
+                        catch (Exception) { }
+                        for (int i = 0; i < count; i++)
+                        {
+                            object value = ReadField(arrayType, arrayField.DebugType, arrayField.ClassRef, (attr != null));
+                            if (fieldProp != null)
+                            {
+                                try { fieldProp.GetValue(obj).GetType().GetMethod("Add").Invoke(fieldProp.GetValue(obj), new object[] { value }); }
+                                catch (Exception) { }
+                            }
+                            if (arrayField.DebugType == EbxFieldType.Pointer || arrayField.DebugType == EbxFieldType.CString)
+                                Pad(8);
+                        }
+                        Position = pos;
+                    }
+                    else
+                    {
                         int index = ReadInt();
                         EbxArray array = arrays[index];
-
                         long arrayPos = Position;
                         Position = arraysOffset + array.Offset;
-
                         for (int i = 0; i < array.Count; i++)
                         {
-                            var arrayField = GetField(arrayType, arrayType.FieldIndex);
                             object value = ReadField(arrayType, arrayField.DebugType, arrayField.ClassRef, (attr != null));
                             if (fieldProp != null)
                             {
@@ -904,20 +934,25 @@ namespace FrostySdk.IO
                         }
                         Position = arrayPos;
                     }
-                    else
+                }
+                else
+                {
+                    object value = ReadField(classType, fieldType.DebugType, fieldType.ClassRef, (attr != null));
+                    if (fieldProp != null)
                     {
-                        object value = ReadField(classType, fieldType.DebugType, fieldType.ClassRef, (attr != null));
-                        if (fieldProp != null)
-                        {
-                            try { fieldProp.SetValue(obj, value); }
-                            catch (Exception) { }
-                        }
+                        try { fieldProp.SetValue(obj, value); }
+                        catch (Exception) { }
                     }
                 }
             }
 
-            while (Position % classType.Alignment != 0)
-                Position++;
+            if (riff)
+                Position = startOffset + classType.Size;
+            else
+            {
+                while (Position % classType.Alignment != 0)
+                    Position++;
+            }
 
             return null;
         }
@@ -1065,7 +1100,13 @@ namespace FrostySdk.IO
                 return "";
 
             long pos = Position;
-            Position = stringsOffset + offset;
+            // RIFF EBX stores CString offsets relative to the offset field itself
+            // (position - 4, since Position has already advanced past the 4-byte offset),
+            // whereas legacy EBX uses an absolute offset into the strings section.
+            if (magic == EbxVersion.Riff)
+                Position = pos + offset - 4;
+            else
+                Position = stringsOffset + offset;
 
             string retStr = ReadNullTerminatedString();
             Position = pos;
@@ -1385,6 +1426,11 @@ namespace FrostySdk.IO
         }
         private List<Guid> classGuids = new List<Guid>();
 
+        // FC26 RIFF state
+        private List<Guid> typeInfoGuids = new List<Guid>();
+        private List<uint> dataContainerOffsets = new List<uint>();
+        private long riffPayloadOffset;
+
         internal static EbxSharedTypeDescriptors std = null;
         internal static EbxSharedTypeDescriptors patchStd = null;
         private readonly bool patched = false;
@@ -1401,6 +1447,11 @@ namespace FrostySdk.IO
 
             patched = inPatched;
             magic = (EbxVersion)ReadUInt();
+            if (magic == EbxVersion.Riff)
+            {
+                LoadRiffEbx();
+                return;
+            }
             if (magic != EbxVersion.Version2 && magic != EbxVersion.Version4)
                 return;
 
@@ -1523,8 +1574,126 @@ namespace FrostySdk.IO
             isValid = true;
         }
 
+        // FC26 RIFF container parser (ported from fetsource EbxReaderV2.LoadRiffEbx).
+        private void LoadRiffEbx()
+        {
+            ReadUInt(); // RIFF chunk size
+            uint chunkName = ReadUInt();
+            if (chunkName != 5784133 && chunkName != 1398293061) // "EBX\0" / "EBXS"
+                throw new InvalidDataException("Expected 'EBX\\0'/'EBXS' four-CC.");
+            chunkName = ReadUInt();
+            if (chunkName != 1146634821) // "EBXD"
+                throw new InvalidDataException("Expected 'EBXD' four-CC.");
+
+            uint chunkSize = ReadUInt();
+            long chunkRel = Position;
+            Pad(16);
+            long payloadOffset = riffPayloadOffset = Position;
+            Position = chunkRel + chunkSize;
+            Pad(2);
+
+            chunkName = ReadUInt();
+            if (chunkName != 1481197125) // "EFIX"
+                throw new InvalidDataException("Expected 'EFIX' four-CC.");
+            ReadUInt(); // chunk size
+
+            fileGuid = ReadGuid();
+            uint classGuidCount = ReadUInt();
+            for (int i = 0; i < classGuidCount; i++)
+                classGuids.Add(ReadGuid());
+
+            uint signatureCount = ReadUInt();
+            List<uint> signatures = new List<uint>((int)signatureCount);
+            for (int i = 0; i < signatureCount; i++)
+                signatures.Add(ReadUInt());
+
+            uint exportedInstancesCount = ReadUInt();
+            exportedCount = (ushort)exportedInstancesCount;
+
+            uint dataContainerCount = ReadUInt();
+            for (int i = 0; i < dataContainerCount; i++)
+                dataContainerOffsets.Add(ReadUInt());
+
+            uint pointerOffsetsCount = ReadUInt();
+            for (int i = 0; i < pointerOffsetsCount; i++) ReadUInt();
+            uint resourceRefOffsetsCount = ReadUInt();
+            for (int i = 0; i < resourceRefOffsetsCount; i++) ReadUInt();
+
+            uint importsCount = ReadUInt();
+            for (int i = 0; i < importsCount; i++)
+            {
+                EbxImportReference import = new EbxImportReference { FileGuid = ReadGuid(), ClassGuid = ReadGuid() };
+                imports.Add(import);
+                if (!dependencies.Contains(import.FileGuid))
+                    dependencies.Add(import.FileGuid);
+            }
+
+            uint importOffsetsCount = ReadUInt();
+            for (int i = 0; i < importOffsetsCount; i++) ReadUInt();
+            uint typeInfoOffsetsCount = ReadUInt();
+            for (int i = 0; i < typeInfoOffsetsCount; i++) ReadUInt();
+
+            ReadUInt();                       // arrayOffset (unused: RIFF arrays are read inline)
+            ReadUInt();
+            stringsOffset = ReadUInt() + payloadOffset;
+
+            chunkName = ReadUInt();
+            if (chunkName != 1482179141) // "EBXX"
+                throw new InvalidDataException("Expected 'EBXX' four-CC.");
+            ReadUInt(); // chunk size
+
+            uint arrCount = ReadUInt();
+            uint boxedValueCount = ReadUInt();
+            for (int i = 0; i < arrCount; i++)
+            {
+                uint offset = ReadUInt();
+                uint elementCount = ReadUInt();
+                uint pathDepth = ReadUInt();
+                ushort typeFlags = ReadUShort();
+                ushort typeId = ReadUShort();
+                arrays.Add(new EbxArray { ClassRef = typeId, Count = elementCount, Offset = offset, TypeFlags = typeFlags, PathDepth = pathDepth });
+            }
+            for (int i = 0; i < boxedValueCount; i++)
+            {
+                ReadUInt(); ReadUInt(); ReadUInt(); ReadUShort(); ReadUShort();
+            }
+
+            // Build one instance per data container.
+            foreach (uint dco in dataContainerOffsets)
+            {
+                Position = payloadOffset + dco;
+                uint typeInfoIndex = ReadUInt();
+                instances.Add(new EbxInstance
+                {
+                    ClassRef = (ushort)typeInfoIndex,
+                    Count = 1,
+                    IsExported = instances.Count < exportedInstancesCount
+                });
+            }
+
+            // Derive type-info guids: classGuid bytes [4..20] with the signature appended at [16..20].
+            for (int i = 0; i < classGuids.Count && i < signatures.Count; i++)
+            {
+                byte[] twenty = new byte[20];
+                Array.Copy(classGuids[i].ToByteArray(), 0, twenty, 0, 16);
+                Array.Copy(BitConverter.GetBytes(signatures[i]), 0, twenty, 16, 4);
+                byte[] guidBytes = new byte[16];
+                Array.Copy(twenty, 4, guidBytes, 0, 16);
+                typeInfoGuids.Add(new Guid(guidBytes));
+            }
+
+            Position = payloadOffset;
+            isValid = true;
+        }
+
         internal override void InternalReadObjects()
         {
+            if (magic == EbxVersion.Riff)
+            {
+                InternalReadObjectsRiff();
+                return;
+            }
+
             List<Type> types = new List<Type>();
             foreach (EbxInstance inst in instances)
             {
@@ -1563,12 +1732,58 @@ namespace FrostySdk.IO
             }
         }
 
+        // FC26 RIFF object reading: types come from typeInfoGuids, each instance has a
+        // 24-byte header, fields are read at absolute offsets, and the cursor is advanced
+        // to startOffset + class.Size afterwards.
+        private void InternalReadObjectsRiff()
+        {
+            foreach (EbxInstance inst in instances)
+            {
+                Type objType = TypeLibrary.GetType(typeInfoGuids[inst.ClassRef]);
+                for (int i = 0; i < inst.Count; i++)
+                {
+                    objects.Add(objType != null ? TypeLibrary.CreateObject(objType) : null);
+                    refCounts.Add(0);
+                }
+            }
+
+            int typeId = 0;
+            int index = 0;
+            foreach (EbxInstance inst in instances)
+            {
+                for (int i = 0; i < inst.Count; i++)
+                {
+                    dynamic obj = objects[typeId++];
+                    if (obj == null) continue;
+                    Type objType = obj.GetType();
+                    EbxClass classType = GetClass(objType);
+
+                    Pad(classType.Alignment);
+                    Guid instanceGuid = Guid.Empty;
+                    if (inst.IsExported)
+                        instanceGuid = ReadGuid();
+
+                    long classPosition = Position;
+                    // 24-byte instance header (two int64, uint32, two uint16)
+                    ReadLong(); ReadLong(); ReadUInt(); ReadUShort(); ReadUShort();
+
+                    obj.SetInstanceGuid(new AssetClassGuid(instanceGuid, index++));
+                    ReadClass(classType, obj, Position - 24);
+                    Position = classPosition + classType.Size;
+                }
+            }
+        }
+
         internal EbxClass GetClass(Type objType)
         {
             EbxClass? classType = null;
+            // RIFF matches the type's TypeInfoGuid against the std descriptors directly;
+            // the V2/4 path requires the guid to also be present in the file's classGuids.
+            bool riff = magic == EbxVersion.Riff;
             foreach (TypeInfoGuidAttribute attr in objType.GetCustomAttributes<TypeInfoGuidAttribute>())
             {
-                if (classGuids.Contains(attr.Guid))
+                bool match = riff ? std.HasClass(attr.Guid) : classGuids.Contains(attr.Guid);
+                if (match)
                 {
                     if (patched && patchStd != null)
                         classType = patchStd.GetClass(attr.Guid);
@@ -1577,7 +1792,7 @@ namespace FrostySdk.IO
                     break;
                 }
             }
-            return classType.Value;
+            return classType ?? default(EbxClass);
         }
 
         internal override PropertyInfo GetProperty(Type objType, EbxField field)
