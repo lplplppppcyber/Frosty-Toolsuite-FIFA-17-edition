@@ -337,7 +337,10 @@ namespace FrostySdk
         // (including SharedTypeDescriptors.ebx) to the memory FS. Mirrors fetsource InitfsLoader.
         private void LoadInitfsFC26(byte[] key, bool patched = true)
         {
+            void Dbg(string s) { try { File.AppendAllText("fc26_initfs_debug.txt", s + "\r\n"); } catch { } }
+
             string path = ResolvePath((patched ? "" : "native_data/") + "initfs_win32");
+            Dbg("[initfs] patched=" + patched + " key=" + (key == null ? "null" : key.Length.ToString()) + " path='" + path + "'");
             if (path == "")
             {
                 if (patched)
@@ -349,10 +352,12 @@ namespace FrostySdk
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read))
                 root = new FC26TocReader().Read(stream, hasHeader: true);
 
+            Dbg("[initfs] root=" + (root == null ? "null" : "ok keys=[" + string.Join(",", root.EnumerateKeys()) + "]"));
             if (root == null)
                 return;
 
             byte[] encrypted = root.GetValue<byte[]>("encrypted");
+            Dbg("[initfs] encrypted=" + (encrypted == null ? "null" : encrypted.Length + " bytes"));
             if (encrypted == null || key == null)
                 return;
 
@@ -384,6 +389,10 @@ namespace FrostySdk
                     memoryFs.Add(name, file.GetValue<byte[]>("payload"));
                 }
             }
+
+            Dbg("[initfs] list=" + (list == null ? "null" : list.Count.ToString())
+                + " memoryFs=" + memoryFs.Count
+                + " hasStd=" + memoryFs.ContainsKey("SharedTypeDescriptors.ebx"));
 
             if (memoryFs.ContainsKey("__fsinternal__"))
             {
