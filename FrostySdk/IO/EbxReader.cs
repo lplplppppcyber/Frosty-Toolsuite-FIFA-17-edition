@@ -1647,6 +1647,11 @@ namespace FrostySdk.IO
             ReadUInt();
             stringsOffset = ReadUInt() + payloadOffset;
 
+            // FC23/FC24/FC25/FC26 EFIX has an extra trailing offset table before EBXX.
+            uint extraCount = ReadUInt();
+            for (int i = 0; i < extraCount; i++)
+                ReadUInt();
+
             chunkName = ReadUInt();
             if (chunkName != 1482179141) // "EBXX"
                 throw new InvalidDataException("Expected 'EBXX' four-CC.");
