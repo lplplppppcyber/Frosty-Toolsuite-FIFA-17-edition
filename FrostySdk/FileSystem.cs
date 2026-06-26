@@ -392,38 +392,88 @@ namespace FrostySdk
 
         private void ProcessLayoutsFC26()
         {
-            string baseLayoutPath  = ResolvePath("native_data/layout.toc");
-            string patchLayoutPath = ResolvePath("native_patch/layout.toc");
+            // Try common FC26 directory naming conventions (game may use Data/Patch or native_data/native_patch)
+            string baseLayoutPath  = FindFC26Layout(false);
+            string patchLayoutPath = FindFC26Layout(true);
+
+            var log = new System.Text.StringBuilder();
+            log.AppendLine("[FC26] BasePath: " + BasePath);
+            log.AppendLine("[FC26] baseLayoutPath: " + (baseLayoutPath == "" ? "<not found>" : baseLayoutPath));
+            log.AppendLine("[FC26] patchLayoutPath: " + (patchLayoutPath == "" ? "<not found>" : patchLayoutPath));
+            log.AppendLine("[FC26] paths: " + string.Join(", ", paths));
+
+            if (baseLayoutPath == "" && patchLayoutPath == "")
+            {
+                log.AppendLine("[FC26] ERROR: no layout.toc found in any known directory");
+                File.WriteAllText("fc26_debug.txt", log.ToString());
+                return;
+            }
 
             FC26TocReader tocReader = new FC26TocReader();
-            DbObject baseLayout = tocReader.Read(baseLayoutPath);
-
-            // FC26 layout.toc "superBundles" has a different structure (Object with Sha1 values).
-            // SuperBundle names are instead sourced from each installChunk's "superBundles" list.
 
             if (patchLayoutPath != "")
             {
                 DbObject patchLayout = tocReader.Read(patchLayoutPath);
-
-                Base = (uint)patchLayout.GetValue<int>("base");
-                Head = (uint)patchLayout.GetValue<int>("head");
-
-                ProcessCatalogsFC26(patchLayout);
+                log.AppendLine("[FC26] patchLayout null: " + (patchLayout == null));
+                if (patchLayout != null)
+                {
+                    Base = (uint)patchLayout.GetValue<int>("base");
+                    Head = (uint)patchLayout.GetValue<int>("head");
+                    log.AppendLine("[FC26] Head=" + Head + " Base=" + Base);
+                    ProcessCatalogsFC26(patchLayout, log);
+                }
             }
             else
             {
-                Base = (uint)baseLayout.GetValue<int>("base");
-                Head = (uint)baseLayout.GetValue<int>("head");
-
-                ProcessCatalogsFC26(baseLayout);
+                DbObject baseLayout = tocReader.Read(baseLayoutPath);
+                log.AppendLine("[FC26] baseLayout null: " + (baseLayout == null));
+                if (baseLayout != null)
+                {
+                    Base = (uint)baseLayout.GetValue<int>("base");
+                    Head = (uint)baseLayout.GetValue<int>("head");
+                    log.AppendLine("[FC26] Head=" + Head + " Base=" + Base);
+                    ProcessCatalogsFC26(baseLayout, log);
+                }
             }
+
+            log.AppendLine("[FC26] catalogs count: " + catalogs.Count);
+            log.AppendLine("[FC26] superBundles count: " + superBundles.Count);
+            foreach (var cat in catalogs)
+                log.AppendLine("[FC26] catalog: " + cat.Name + " sb=" + cat.SuperBundles.Count);
+
+            File.WriteAllText("fc26_debug.txt", log.ToString());
         }
 
-        private void ProcessCatalogsFC26(DbObject layout)
+        // Finds layout.toc for FC26 by trying multiple known directory names.
+        private string FindFC26Layout(bool patch)
         {
+            string[] dirs = patch
+                ? new[] { "Patch", "native_patch", "patch" }
+                : new[] { "Data", "native_data", "data" };
+
+            // First try via ResolvePath (respects Sources order)
+            string resolved = ResolvePath(patch ? "native_patch/layout.toc" : "native_data/layout.toc");
+            if (resolved != "" && File.Exists(resolved))
+                return resolved;
+
+            // Fall back to direct path search from BasePath
+            foreach (string dir in dirs)
+            {
+                string p = BasePath + dir + "\\layout.toc";
+                if (File.Exists(p))
+                    return p;
+            }
+
+            return "";
+        }
+
+        private void ProcessCatalogsFC26(DbObject layout, System.Text.StringBuilder log = null)
+        {
+            log?.AppendLine("[FC26] layout keys: " + string.Join(", ", layout.EnumerateKeys()));
             DbObject installManifest = layout.GetValue<DbObject>("installManifest");
             if (installManifest == null)
             {
+                log?.AppendLine("[FC26] installManifest is null");
                 CatalogInfo ci = new CatalogInfo() { Name = "" };
                 foreach (string sbName in superBundles)
                     ci.SuperBundles.Add(sbName, false);
@@ -431,9 +481,14 @@ namespace FrostySdk
                 return;
             }
 
+            log?.AppendLine("[FC26] installManifest keys: " + string.Join(", ", installManifest.EnumerateKeys()));
             DbObject installChunks = installManifest.GetValue<DbObject>("installChunks");
             if (installChunks == null)
+            {
+                log?.AppendLine("[FC26] installChunks is null");
                 return;
+            }
+            log?.AppendLine("[FC26] installChunks count: " + installChunks.Count);
 
             foreach (DbObject installChunk in installChunks)
             {
