@@ -419,30 +419,44 @@ namespace FrostySdk
 
             FC26TocReader tocReader = new FC26TocReader();
 
-            if (patchLayoutPath != "")
+            // Always read both layouts — the patch is a delta and may not have installManifest/head/base.
+            DbObject baseLayout  = baseLayoutPath  != "" ? tocReader.Read(baseLayoutPath)  : null;
+            DbObject patchLayout = patchLayoutPath != "" ? tocReader.Read(patchLayoutPath) : null;
+
+            log.AppendLine("[FC26] baseLayout null: "  + (baseLayout  == null));
+            log.AppendLine("[FC26] patchLayout null: " + (patchLayout == null));
+            if (baseLayout  != null) log.AppendLine("[FC26] baseLayout keys:  " + string.Join(", ", baseLayout.EnumerateKeys()));
+            if (patchLayout != null) log.AppendLine("[FC26] patchLayout keys: " + string.Join(", ", patchLayout.EnumerateKeys()));
+
+            // head/base: prefer patch, fall back to base
+            DbObject headSource = patchLayout ?? baseLayout;
+            if (headSource != null)
             {
-                DbObject patchLayout = tocReader.Read(patchLayoutPath);
-                log.AppendLine("[FC26] patchLayout null: " + (patchLayout == null));
-                if (patchLayout != null)
-                {
-                    Base = (uint)patchLayout.GetValue<int>("base");
-                    Head = (uint)patchLayout.GetValue<int>("head");
-                    log.AppendLine("[FC26] Head=" + Head + " Base=" + Base);
-                    ProcessCatalogsFC26(patchLayout, log);
-                }
+                Base = (uint)headSource.GetValue<int>("base");
+                Head = (uint)headSource.GetValue<int>("head");
             }
+            // If patch has no head, try base
+            if (Head == 0 && patchLayout != null && baseLayout != null)
+            {
+                uint bh = (uint)baseLayout.GetValue<int>("head");
+                if (bh != 0) Head = bh;
+            }
+            log.AppendLine("[FC26] Head=" + Head + " Base=" + Base);
+
+            // installManifest: try patch first, then base (patch is usually a delta without it)
+            DbObject catalogSource = null;
+            if (patchLayout != null && patchLayout.GetValue<DbObject>("installManifest") != null)
+                catalogSource = patchLayout;
+            else if (baseLayout != null && baseLayout.GetValue<DbObject>("installManifest") != null)
+                catalogSource = baseLayout;
             else
-            {
-                DbObject baseLayout = tocReader.Read(baseLayoutPath);
-                log.AppendLine("[FC26] baseLayout null: " + (baseLayout == null));
-                if (baseLayout != null)
-                {
-                    Base = (uint)baseLayout.GetValue<int>("base");
-                    Head = (uint)baseLayout.GetValue<int>("head");
-                    log.AppendLine("[FC26] Head=" + Head + " Base=" + Base);
-                    ProcessCatalogsFC26(baseLayout, log);
-                }
-            }
+                catalogSource = patchLayout ?? baseLayout; // last resort
+
+            log.AppendLine("[FC26] catalogSource: " + (catalogSource == null ? "null" :
+                (catalogSource == patchLayout ? "patch" : "base")));
+
+            if (catalogSource != null)
+                ProcessCatalogsFC26(catalogSource, log);
 
             log.AppendLine("[FC26] catalogs count: " + catalogs.Count);
             log.AppendLine("[FC26] superBundles count: " + superBundles.Count);
