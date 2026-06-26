@@ -778,6 +778,7 @@ namespace Frosty.Core.Sdk
             public ushort alignment;
             public uint fieldCount;
             public uint padding3;
+            public uint nameHash;
 
             public long parentClass;
             public long arrayTypeOffset;
@@ -785,6 +786,15 @@ namespace Frosty.Core.Sdk
 
             public virtual void Read(MemoryReader reader)
             {
+                // FC26 (and FC24/FC25) use a distinct in-memory TypeInfo layout. Ported from
+                // fetsource SDK_Generation/TypeInfo.cs. EbxFieldType: Struct=2, Pointer/Class=3,
+                // Enum=8, Function, Delegate.
+                if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                {
+                    ReadFC26(reader);
+                    return;
+                }
+
                 bool byteAlignFieldCount = (ProfilesLibrary.DataVersion == (int)ProfileVersion.NeedForSpeedRivals || ProfilesLibrary.DataVersion == (int)ProfileVersion.DragonAgeInquisition || ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesGardenWarfare);
 
                 name = reader.ReadNullTerminatedString();
@@ -924,6 +934,58 @@ namespace Frosty.Core.Sdk
                 }
             }
 
+            // FC26 in-memory TypeInfo layout (ported from fetsource SDK_Generation/TypeInfo.cs).
+            // Field-type numbering follows fetsource's EbxFieldType: Struct=2, Pointer/Class=3,
+            // Enum=8, Function=24, Delegate=28.
+            private void ReadFC26(MemoryReader reader)
+            {
+                name = reader.ReadNullTerminatedString();
+                nameHash = reader.ReadUInt();
+                flags = reader.ReadUShort();
+                flags >>= 1;
+                size = reader.ReadUShort();
+                guid = reader.ReadGuid();
+                long nameSpaceOffset = reader.ReadLong();
+                reader.ReadLong(); // skip
+                alignment = reader.ReadUShort();
+                fieldCount = reader.ReadUShort();
+                padding3 = reader.ReadUInt();
+                reader.Pad(8);
+
+                long[] offsets = new long[7];
+                for (int i = 0; i < 7; i++)
+                    offsets[i] = reader.ReadLong();
+
+                reader.Position = nameSpaceOffset;
+                nameSpace = reader.ReadNullTerminatedString();
+
+                parentClass = offsets[0];
+                int t = Type;
+                bool bReadFields = false;
+                if (t == 2)       { reader.Position = offsets[6]; bReadFields = true; }              // Struct
+                else if (t == 3)  { reader.Position = offsets[1]; bReadFields = true; }              // Pointer/Class
+                else if (t == 8)  { parentClass = 0; reader.Position = offsets[0]; bReadFields = true; } // Enum
+                else if (t == 24) { reader.Position = offsets[5]; bReadFields = true; }              // Function
+                else if (t == 28) { reader.Position = offsets[0]; bReadFields = true; }              // Delegate
+
+                if (!bReadFields)
+                    return;
+
+                for (int j = 0; j < fieldCount; j++)
+                {
+                    FieldInfo fi = new FieldInfo();
+                    fi.Read(reader);
+                    fi.index = j;
+                    // FC26 (unlike FC25): function/delegate fields have an extra 8 bytes + padding.
+                    if (t == 24 || t == 28)
+                    {
+                        reader.Position += 8;
+                        reader.Pad(8);
+                    }
+                    fields.Add(fi);
+                }
+            }
+
             public virtual void Modify(DbObject classObj, Dictionary<long, ClassInfo> offsetClassInfoMapping)
             {
             }
@@ -981,9 +1043,22 @@ namespace Frosty.Core.Sdk
             public ushort padding1;
             public long typeOffset;
             public int index;
+            public uint nameHash;
 
             public virtual void Read(MemoryReader reader)
             {
+                // FC26 field layout (ported from fetsource SDK_Generation/FieldInfo.cs):
+                // name | nameHash(u32) | flags(u16) | offset(u16) | typeOffset(i64).
+                if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                {
+                    name = reader.ReadNullTerminatedString();
+                    nameHash = reader.ReadUInt();
+                    flags = reader.ReadUShort();
+                    offset = reader.ReadUShort();
+                    typeOffset = reader.ReadLong();
+                    return;
+                }
+
                 name = reader.ReadNullTerminatedString();
                 flags = reader.ReadUShort();
                 offset = reader.ReadUInt();

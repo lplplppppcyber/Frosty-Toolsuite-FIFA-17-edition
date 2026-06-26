@@ -55,6 +55,13 @@ namespace Frosty.Core.IO
             CloseHandle(handle);
         }
 
+        // Advances Position to the next multiple of <alignment> (FC26 TypeInfo uses 8-byte padding).
+        public void Pad(int alignment)
+        {
+            while (Position % alignment != 0L)
+                Position++;
+        }
+
         public byte ReadByte()
         {
             FillBuffer(1);
