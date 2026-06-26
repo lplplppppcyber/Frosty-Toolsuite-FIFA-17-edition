@@ -505,6 +505,16 @@ namespace FrostySdk.Managers
                     resOrigSz[i]  = r.ReadUInt(Endian.Little);
                 }
 
+                // RES extra: resType[] | resMeta[] | resRid[]
+                // IMPORTANT: these come BEFORE the chunk table in the stream (matches
+                // fetsource BundleReader_F21: ReadRes reads type/meta/rid, then ReadChunks).
+                uint[]   resTypes = new uint[resCount];
+                byte[][] resMetas = new byte[resCount][];
+                long[]   resRids  = new long[resCount];
+                for (int i = 0; i < resCount; i++) resTypes[i] = r.ReadUInt(Endian.Little);
+                for (int i = 0; i < resCount; i++) resMetas[i] = r.ReadBytes(16);
+                for (int i = 0; i < resCount; i++) resRids[i]  = r.ReadLong(Endian.Little);
+
                 // Chunk guid + logical offsets/sizes
                 Guid[] chunkIds  = new Guid[chunkCount];
                 uint[] logOffs   = new uint[chunkCount];
@@ -515,14 +525,6 @@ namespace FrostySdk.Managers
                     logOffs[i]  = r.ReadUInt(Endian.Little);
                     logSizes[i] = r.ReadUInt(Endian.Little);
                 }
-
-                // RES extra: resType[] | resMeta[] | resRid[]
-                uint[]   resTypes = new uint[resCount];
-                byte[][] resMetas = new byte[resCount][];
-                long[]   resRids  = new long[resCount];
-                for (int i = 0; i < resCount; i++) resTypes[i] = r.ReadUInt(Endian.Little);
-                for (int i = 0; i < resCount; i++) resMetas[i] = r.ReadBytes(16);
-                for (int i = 0; i < resCount; i++) resRids[i]  = r.ReadLong(Endian.Little);
 
                 // Build EBX list
                 DbObject ebxList = DbObject.CreateList();
