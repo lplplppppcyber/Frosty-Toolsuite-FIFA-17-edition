@@ -1427,6 +1427,7 @@ namespace Frosty.Core.Sdk
                 List<EbxField> fields = new List<EbxField>();
                 List<EbxClass?> classes = new List<EbxClass?>();
                 List<Guid> guids = new List<Guid>();
+                int fieldIdx = 0;
 
                 if (magic == 0x46464952) // "RIFF" — FC26 RFL2 shared type descriptors
                 {
@@ -1452,8 +1453,6 @@ namespace Frosty.Core.Sdk
                     };
                     fields.Add(field);
                 }
-
-                int fieldIdx = 0;
 
                 for (int i = 0; i < numClasses; i++)
                 {
