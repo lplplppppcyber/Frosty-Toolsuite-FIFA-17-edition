@@ -124,7 +124,7 @@ namespace FrostySdk.IO
                 case TypeString:
                 {
                     int len = reader.Read7BitEncodedInt();
-                    return Encoding.UTF8.GetString(reader.ReadBytes(len));
+                    return Encoding.UTF8.GetString(reader.ReadBytes(len)).TrimEnd('\0');
                 }
 
                 case TypeInt:
