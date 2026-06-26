@@ -26,7 +26,7 @@ namespace FC26ProfilePlugin
                 AssetLoader = "FC26AssetLoader",
                 SDKFilename = "FC26SDK",
                 EbxVersion = 4,
-                RequiresKey = false,
+                RequiresKey = true,
                 MustAddChunks = false,
                 EnableExecution = false,
                 ContainsEAC = true,
