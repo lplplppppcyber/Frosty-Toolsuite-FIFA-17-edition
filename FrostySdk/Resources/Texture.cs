@@ -145,9 +145,10 @@ namespace FrostySdk.Resources
                     || ProfilesLibrary.DataVersion == (int)ProfileVersion.Fifa19 || ProfilesLibrary.DataVersion == (int)ProfileVersion.Anthem || ProfilesLibrary.DataVersion == (int)ProfileVersion.Battlefield5
                     || ProfilesLibrary.DataVersion == (int)ProfileVersion.Madden20 || ProfilesLibrary.DataVersion == (int)ProfileVersion.Fifa20 || ProfilesLibrary.DataVersion == (int)ProfileVersion.NeedForSpeedHeat
                     || ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesBattleforNeighborville || ProfilesLibrary.DataVersion == (int)ProfileVersion.StarWarsSquadrons
+                    || ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26
                         )
                 {
-                    unknown1 = reader.ReadUInt();
+                    unknown1 = reader.ReadUInt(); // CustomPoolId
                 }
                 Flags = (TextureFlags)reader.ReadUShort();
             }
@@ -160,6 +161,9 @@ namespace FrostySdk.Resources
                 Flags = (TextureFlags)reader.ReadUShort();
             MipCount = reader.ReadByte();
             FirstMip = reader.ReadByte();
+            // FC24+ (incl. FC26) has an 8-byte field here before the chunk guid.
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                reader.ReadULong();
             chunkId = reader.ReadGuid();
             for (int i = 0; i < 15; i++)
                 MipSizes[i] = reader.ReadUInt();
@@ -180,7 +184,11 @@ namespace FrostySdk.Resources
             AssetNameHash = reader.ReadUInt();
             if (ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesGardenWarfare2)
                 Unknown3[0] = reader.ReadUInt();
-            TextureGroup = reader.ReadSizedString(16);
+            // FC25/FC26 store the texture group as a null-terminated string; older titles use a fixed 16-byte field.
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                TextureGroup = reader.ReadNullTerminatedString();
+            else
+                TextureGroup = reader.ReadSizedString(16);
             if (ProfilesLibrary.DataVersion == (int)ProfileVersion.Battlefield5 || ProfilesLibrary.DataVersion == (int)ProfileVersion.StarWarsSquadrons)
                 Unknown3[0] = reader.ReadUInt();
             Data = am.GetChunk(am.GetChunkEntry(chunkId));
