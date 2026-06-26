@@ -725,15 +725,20 @@ namespace FrostyEditor
             if (asset.Type == "EncryptedAsset")
                 return;
 
-            // FC26: assets can only be opened once a type SDK has been generated.
-            // Without it the EBX cannot be parsed and the property grid would crash.
-            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26 && TypeLibrary.GetSdkVersion() == 0)
+            // FC26: the type SDK can now be imported from FET, but the RIFF EBX reader
+            // needed to actually parse FC26 asset data isn't implemented yet, so opening
+            // an asset would crash. Block it cleanly until the reader lands.
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
             {
-                FrostyMessageBox.Show(
-                    "FC26 assets can't be opened yet because the type SDK hasn't been generated.\n\n" +
-                    "Launch the game with the Live Editor (to bypass anti-cheat), then use " +
-                    "Tools → Update Type SDK. Until then you can browse the asset tree but not edit assets.",
-                    "Frosty Editor");
+                if (TypeLibrary.GetSdkVersion() == 0)
+                    FrostyMessageBox.Show(
+                        "FC26 type SDK not loaded. Use Tools → Import FET FC26 SDK, then restart.",
+                        "Frosty Editor");
+                else
+                    FrostyMessageBox.Show(
+                        "FC26 SDK is loaded, but reading FC26 asset data (RIFF EBX) isn't implemented yet, " +
+                        "so assets can't be opened. You can browse the asset tree for now.",
+                        "Frosty Editor");
                 return;
             }
 
