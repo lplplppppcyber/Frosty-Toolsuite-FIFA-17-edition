@@ -739,6 +739,24 @@ namespace FrostySdk.Managers
                     Console.WriteLine(entry.Name);
 #endif
 
+                // FC26: the EBX binary format is unsupported and type resolution
+                // requires the SDK (blocked by EAAC). Keep the bundle-provided name
+                // so the asset tree is browsable, assign a placeholder type and a
+                // deterministic GUID, and skip the binary parse.
+                if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                {
+                    entry.Type = "EbxAsset";
+                    using (var md5 = System.Security.Cryptography.MD5.Create())
+                        entry.Guid = new Guid(md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(entry.Name)));
+                    if (!ebxGuidList.ContainsKey(entry.Guid))
+                        ebxGuidList.Add(entry.Guid, entry);
+
+                    count++;
+                    WriteToLog("Initial load - Indexing data ({0}%)", (int)((count / (double)assetCount) * 100.0));
+                    WriteToLog("progress:{0}", ((count / (double)assetCount) * 100.0d));
+                    continue;
+                }
+
                 bool patched = false;
                 if (ProfilesLibrary.DataVersion == (int)ProfileVersion.Anthem)
                 {
