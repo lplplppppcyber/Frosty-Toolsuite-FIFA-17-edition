@@ -140,12 +140,8 @@ namespace Frosty.Core.IO
         {
             byte[] outBuffer = new byte[numBytes];
             int bytesRead = 0;
-            uint oldProtect = 0;
 
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 2u /* PAGE_READONLY */, ref oldProtect);
-            bool ok = ReadProcessMemory(handle, position, outBuffer, numBytes, ref bytesRead);
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
-            if (!ok)
+            if (!ReadProcessMemory(handle, position, outBuffer, numBytes, ref bytesRead))
                 return null;
 
             position += numBytes;
@@ -226,11 +222,18 @@ namespace Frosty.Core.IO
         protected virtual void FillBuffer(int numBytes)
         {
             int bytesRead = 0;
-            uint oldProtect = 0;
-            // Force the page readable before reading (defeats EAAC .data page guards), then restore.
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 2u /* PAGE_READONLY */, ref oldProtect);
-            ReadProcessMemory(handle, position, buffer, numBytes, ref bytesRead);
-            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
+            // First try a plain read. Only if it fails (EAAC no-access guard) do we briefly
+            // make the page fully accessible, read, and restore — using EXECUTE_READWRITE so
+            // the game can still write/execute during the window (READONLY would crash it).
+            if (!ReadProcessMemory(handle, position, buffer, numBytes, ref bytesRead) || bytesRead != numBytes)
+            {
+                uint oldProtect = 0;
+                if (VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 0x40u /* PAGE_EXECUTE_READWRITE */, ref oldProtect))
+                {
+                    ReadProcessMemory(handle, position, buffer, numBytes, ref bytesRead);
+                    VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
+                }
+            }
             position += numBytes;
         }
     }
