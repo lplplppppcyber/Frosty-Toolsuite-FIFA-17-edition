@@ -63,6 +63,9 @@
       <HintPath>..\FrostyEditor\ThirdParty\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>..\FrostyEditor\ThirdParty\Mono.Cecil.dll</HintPath>
+    </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="SharpDX">
@@ -183,6 +186,7 @@
       <DependentUpon>OptionsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Sdk\ClassesSdkCreator.cs" />
+    <Compile Include="Sdk\FetSdkImporter.cs" />
     <Compile Include="Controls\FrostyTextureViewer.cs" />
     <Compile Include="Sdk\FBTypes\Anthem.cs" />
     <Compile Include="Sdk\FBTypes\AnthemDemo.cs" />
