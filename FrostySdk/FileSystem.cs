@@ -263,6 +263,12 @@ namespace FrostySdk
 
         private void LoadInitfs(byte[] key, bool patched = true)
         {
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+            {
+                LoadInitfsFC26(key, patched);
+                return;
+            }
+
             string path = ResolvePath((patched ? "" : "native_data/") + "initfs_win32");
             if (path == "")
                 return;
@@ -323,6 +329,70 @@ namespace FrostySdk
                 memoryFs.Remove("__fsinternal__");
                 if (obj.GetValue<bool>("inheritContent"))
                     LoadInitfs(key, patched: false);
+            }
+        }
+
+        // FC26 stores initfs_win32 as a self-describing TocEntry container with an AES-CBC
+        // encrypted payload. Decrypt it with the user key, then add every embedded file
+        // (including SharedTypeDescriptors.ebx) to the memory FS. Mirrors fetsource InitfsLoader.
+        private void LoadInitfsFC26(byte[] key, bool patched = true)
+        {
+            string path = ResolvePath((patched ? "" : "native_data/") + "initfs_win32");
+            if (path == "")
+            {
+                if (patched)
+                    LoadInitfsFC26(key, patched: false);
+                return;
+            }
+
+            DbObject root;
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read))
+                root = new FC26TocReader().Read(stream, hasHeader: true);
+
+            if (root == null)
+                return;
+
+            byte[] encrypted = root.GetValue<byte[]>("encrypted");
+            if (encrypted == null || key == null)
+                return;
+
+            byte[] decrypted;
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = key;
+                aes.IV = key;
+                aes.Mode = CipherMode.CBC;
+                aes.Padding = PaddingMode.None;
+                using (ICryptoTransform decryptor = aes.CreateDecryptor())
+                    decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
+            }
+
+            DbObject list;
+            using (MemoryStream ms = new MemoryStream(decrypted))
+                list = new FC26TocReader().Read(ms, hasHeader: false);
+
+            if (list != null)
+            {
+                foreach (DbObject fileStub in list)
+                {
+                    DbObject file = fileStub.GetValue<DbObject>("$file");
+                    if (file == null)
+                        continue;
+                    string name = file.GetValue<string>("name");
+                    if (string.IsNullOrEmpty(name) || memoryFs.ContainsKey(name))
+                        continue;
+                    memoryFs.Add(name, file.GetValue<byte[]>("payload"));
+                }
+            }
+
+            if (memoryFs.ContainsKey("__fsinternal__"))
+            {
+                DbObject obj;
+                using (MemoryStream ms = new MemoryStream(memoryFs["__fsinternal__"]))
+                    obj = new FC26TocReader().Read(ms, hasHeader: false);
+                memoryFs.Remove("__fsinternal__");
+                if (obj != null && obj.GetValue<bool>("inheritContent") && patched)
+                    LoadInitfsFC26(key, patched: false);
             }
         }
 
