@@ -1328,6 +1328,77 @@ namespace Frosty.Core.Sdk
             return true;
         }
 
+        // FC26 SharedTypeDescriptors use the RIFF "RFL2" container (ported from
+        // fetsource EbxSharedTypeDescriptors.ReadVersion2). Populates fields/classes/guids
+        // in the same shape the existing (non-RIFF) parser produces, so the downstream
+        // name-hash mapping is unchanged.
+        private void ReadRiffSharedTypeDescriptors(NativeReader reader, List<EbxField> fields, List<EbxClass?> classes, List<Guid> guids, Dictionary<uint, string> hashToFieldMapping, List<Guid> existingClasses)
+        {
+            reader.ReadUInt(); // RIFF chunk size
+
+            string ebxt = System.Text.Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (ebxt != "EBXT")
+                throw new System.IO.InvalidDataException("Expected 'EBXT' four-CC but got '" + ebxt + "'.");
+
+            string refl = System.Text.Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (refl != "REFL" && refl != "RFL2")
+                throw new System.IO.InvalidDataException("Expected 'REFL'/'RFL2' four-CC but got '" + refl + "'.");
+
+            reader.ReadUInt(); // payload size / unused
+
+            uint typeSignaturesCount = reader.ReadUInt();
+            for (int i = 0; i < typeSignaturesCount; i++)
+            {
+                reader.ReadUInt();              // type signature
+                guids.Add(reader.ReadGuid());   // class guid (parallel to type descriptors below)
+            }
+
+            uint typeDescriptorsCount = reader.ReadUInt();
+            for (int i = 0; i < typeDescriptorsCount; i++)
+            {
+                uint nameHash    = reader.ReadUInt();
+                uint fieldIndex  = reader.ReadUInt();
+                ushort fieldCount = reader.ReadUShort();
+                ushort classType  = reader.ReadUShort();
+                ushort size       = reader.ReadUShort();
+                ushort alignment  = reader.ReadUShort();
+
+                EbxClass theClass = new EbxClass
+                {
+                    NameHash   = nameHash,
+                    FieldIndex = (int)fieldIndex,
+                    FieldCount = (byte)fieldCount,
+                    Alignment  = (byte)(alignment == 0 ? 8 : alignment),
+                    Size       = size,
+                    Type       = classType, // raw; downstream mapping shifts >> 1
+                    Index      = i
+                };
+                classes.Add(theClass);
+                if (i < guids.Count && !existingClasses.Contains(guids[i]))
+                    existingClasses.Add(guids[i]);
+            }
+
+            uint fieldDescriptorsCount = reader.ReadUInt();
+            for (int i = 0; i < fieldDescriptorsCount; i++)
+            {
+                uint nameHash   = reader.ReadUInt();
+                uint dataOffset = reader.ReadUInt();
+                ushort type     = reader.ReadUShort();
+                short classRef  = (short)reader.ReadUShort();
+
+                EbxField field = new EbxField
+                {
+                    Name         = hashToFieldMapping.ContainsKey(nameHash) ? hashToFieldMapping[nameHash] : "",
+                    NameHash     = nameHash,
+                    Type         = (ushort)(type >> 1),
+                    ClassRef     = (ushort)classRef,
+                    DataOffset   = dataOffset,
+                    SecondOffset = 0
+                };
+                fields.Add(field);
+            }
+        }
+
         private void LoadSharedTypeDescriptors(string name, Dictionary<string, Tuple<EbxClass, DbObject>> mapping, List<Guid> existingClasses)
         {
             byte[] typeDescData = App.FileSystem.GetFileFromMemoryFs(name);
@@ -1352,10 +1423,20 @@ namespace Frosty.Core.Sdk
             using (NativeReader reader = new NativeReader(new MemoryStream(typeDescData)))
             {
                 uint magic = reader.ReadUInt();
+
+                List<EbxField> fields = new List<EbxField>();
+                List<EbxClass?> classes = new List<EbxClass?>();
+                List<Guid> guids = new List<Guid>();
+
+                if (magic == 0x46464952) // "RIFF" — FC26 RFL2 shared type descriptors
+                {
+                    ReadRiffSharedTypeDescriptors(reader, fields, classes, guids, hashToFieldMapping, existingClasses);
+                }
+                else
+                {
                 ushort numClasses = reader.ReadUShort();
                 ushort numFields = reader.ReadUShort();
 
-                List<EbxField> fields = new List<EbxField>();
                 for (int i = 0; i < numFields; i++)
                 {
                     uint hash = reader.ReadUInt();
@@ -1373,8 +1454,6 @@ namespace Frosty.Core.Sdk
                 }
 
                 int fieldIdx = 0;
-                List<EbxClass?> classes = new List<EbxClass?>();
-                List<Guid> guids = new List<Guid>();
 
                 for (int i = 0; i < numClasses; i++)
                 {
@@ -1419,6 +1498,7 @@ namespace Frosty.Core.Sdk
                     classes.Add(theClass);
                     guids.Add(guid);
                 }
+                } // end else (non-RIFF parsing)
 
                 for (int i = 0; i < classes.Count; i++)
                 {
