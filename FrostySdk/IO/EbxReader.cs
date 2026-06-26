@@ -1175,12 +1175,23 @@ namespace FrostySdk.IO
         private Dictionary<Guid, int> mapping = new Dictionary<Guid, int>();
         private List<EbxField> fields = new List<EbxField>();
         private List<Guid> guids = new List<Guid>();
+        // FC26 RIFF: maps an array/boxed-value path-depth to (class, fieldNameHash).
+        private Dictionary<uint, uint> pathDepthToIndex = new Dictionary<uint, uint>();
+        private List<KeyValuePair<EbxClass, uint>> arraysAndBoxedValues = new List<KeyValuePair<EbxClass, uint>>();
 
         public EbxSharedTypeDescriptors(FileSystem fs, string name, bool patch)
         {
             using (NativeReader reader = new NativeReader(new MemoryStream(fs.GetFileFromMemoryFs(name))))
             {
                 uint magic = reader.ReadUInt();
+
+                // FC26 uses the RIFF "RFL2" container for SharedTypeDescriptors.
+                if (magic == 0x46464952)
+                {
+                    ReadRiff(reader, patch);
+                    return;
+                }
+
                 ushort numClasses = reader.ReadUShort();
                 ushort numFields = reader.ReadUShort();
 
@@ -1247,6 +1258,106 @@ namespace FrostySdk.IO
                     fieldIdx += fieldCount;
                 }
             }
+        }
+
+        // FC26 RIFF/RFL2 shared type descriptors (ported from fetsource
+        // EbxSharedTypeDescriptors.ReadVersion2). Magic already consumed by caller.
+        private void ReadRiff(NativeReader reader, bool patch)
+        {
+            reader.ReadUInt(); // RIFF chunk size
+
+            string ebxt = System.Text.Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (ebxt != "EBXT")
+                throw new System.IO.InvalidDataException("Expected 'EBXT' four-CC but got '" + ebxt + "'.");
+            string refl = System.Text.Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (refl != "REFL" && refl != "RFL2")
+                throw new System.IO.InvalidDataException("Expected 'REFL'/'RFL2' four-CC but got '" + refl + "'.");
+            reader.ReadUInt(); // payload size / unused
+
+            uint typeSignaturesCount = reader.ReadUInt();
+            for (int i = 0; i < typeSignaturesCount; i++)
+            {
+                reader.ReadUInt();            // type signature
+                guids.Add(reader.ReadGuid()); // class guid (parallel to type descriptors below)
+            }
+
+            uint typeDescriptorsCount = reader.ReadUInt();
+            for (int i = 0; i < typeDescriptorsCount; i++)
+            {
+                uint nameHash    = reader.ReadUInt();
+                uint fieldIndex  = reader.ReadUInt();
+                ushort fieldCount = reader.ReadUShort();
+                ushort classType  = reader.ReadUShort();
+                ushort size       = reader.ReadUShort();
+                ushort alignment  = reader.ReadUShort();
+
+                EbxClass ebxClass = new EbxClass
+                {
+                    NameHash   = nameHash,
+                    FieldIndex = (int)fieldIndex,
+                    FieldCount = (byte)fieldCount,
+                    Alignment  = (byte)(alignment == 0 ? 8 : alignment),
+                    Size       = size,
+                    Type       = (ushort)(classType >> 1),
+                    Index      = i
+                };
+                if (patch)
+                    ebxClass.SecondSize = 1;
+
+                if (i < guids.Count && !mapping.ContainsKey(guids[i]))
+                    mapping.Add(guids[i], classes.Count);
+                classes.Add(ebxClass);
+            }
+
+            uint fieldDescriptorsCount = reader.ReadUInt();
+            for (int i = 0; i < fieldDescriptorsCount; i++)
+            {
+                uint nameHash   = reader.ReadUInt();
+                uint dataOffset = reader.ReadUInt();
+                ushort type     = reader.ReadUShort();
+                short classRef  = (short)reader.ReadUShort();
+
+                fields.Add(new EbxField
+                {
+                    NameHash     = nameHash,
+                    Type         = (ushort)(type >> 1),
+                    ClassRef     = (ushort)classRef,
+                    DataOffset   = dataOffset,
+                    SecondOffset = 0
+                });
+            }
+
+            uint pathDepthCount = reader.ReadUInt();
+            for (int i = 0; i < pathDepthCount; i++)
+            {
+                uint nameHash = reader.ReadUInt();
+                reader.ReadUInt();             // unk
+                uint index = reader.ReadUInt();
+                if (!pathDepthToIndex.ContainsKey(nameHash))
+                    pathDepthToIndex.Add(nameHash, index);
+            }
+
+            uint arraysAndBoxedCount = reader.ReadUInt();
+            for (int i = 0; i < arraysAndBoxedCount; i++)
+            {
+                uint fieldNameHash = reader.ReadUInt();
+                int classRef = reader.ReadInt();
+                if (classRef >= 0 && classRef < classes.Count && classes[classRef].HasValue)
+                    arraysAndBoxedValues.Add(new KeyValuePair<EbxClass, uint>(classes[classRef].Value, fieldNameHash));
+                else
+                    arraysAndBoxedValues.Add(new KeyValuePair<EbxClass, uint>(default(EbxClass), fieldNameHash));
+            }
+        }
+
+        public bool TryGetFieldAndClassForPathDepth(uint pathDepth, out EbxClass ebxClass, out uint fieldNameHash)
+        {
+            ebxClass = default(EbxClass);
+            fieldNameHash = 0;
+            if (!pathDepthToIndex.TryGetValue(pathDepth, out uint idx) || idx >= arraysAndBoxedValues.Count)
+                return false;
+            ebxClass = arraysAndBoxedValues[(int)idx].Key;
+            fieldNameHash = arraysAndBoxedValues[(int)idx].Value;
+            return true;
         }
 
         public bool HasClass(Guid guid) => mapping.ContainsKey(guid);
