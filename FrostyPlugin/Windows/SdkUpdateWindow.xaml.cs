@@ -217,7 +217,10 @@ namespace Frosty.Core.Windows
             if (offsets == null || offsets.Count == 0)
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
-                task.FailMessage = "Pattern not found in game memory. Ensure the game is fully loaded and (for FC26) launched without anti-cheat.";
+                task.FailMessage = isFc26
+                    ? "Pattern not found in game memory. Make sure FC26 is fully loaded (at the main menu) and " +
+                      "running through the Live Editor so anti-cheat is bypassed and memory can be read."
+                    : "Pattern not found in game memory. Ensure the game is fully loaded.";
                 return false;
             }
 
@@ -252,8 +255,8 @@ namespace Frosty.Core.Windows
             {
                 task.State = SdkUpdateTaskState.CompletedFail;
                 task.FailMessage = isFc26
-                    ? "FC26 SDK generation failed: EA Anti-Cheat (EAAC) blocks reading the TypeInfo pointer from game memory. " +
-                      "The SDK cannot be generated while EAAC is running.\n\n" +
+                    ? "Pattern found but the TypeInfo pointer is still null after 30s. If anti-cheat (EAAC) is active " +
+                      "the read returns 0 — launch FC26 through the Live Editor to bypass it, wait at the main menu, then retry.\n\n" +
                       "You can still use the asset tree to browse bundles and assets — click Finish to continue."
                     : "Pattern found but TypeInfo pointer is null after 30s. Game may still be loading or TypeInfo not yet registered.";
                 return false;
