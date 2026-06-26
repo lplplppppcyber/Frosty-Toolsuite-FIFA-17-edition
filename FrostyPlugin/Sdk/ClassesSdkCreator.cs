@@ -450,7 +450,11 @@ namespace Frosty.Core.Sdk
                             string funcName1 = tmpType.GetMethods()[0].Name;
                             string funcName2 = tmpType.GetMethods()[3].Name;
 
-                            if (classObj.HasValue("isData"))
+                            // A direct child of DataContainer defines the base virtual GetId()
+                            // itself (there is no inherited one to override). If it also has a
+                            // Name field, emit the virtual-with-Name version and mark addedGetId
+                            // so the default virtual below isn't emitted too (avoids a duplicate).
+                            if (classObj.HasValue("isData") || parent == "DataContainer")
                             {
                                 string fieldName = fieldObj.GetValue<string>("name");
                                 sb.AppendLine("protected virtual CString GetId()\r\n{");
