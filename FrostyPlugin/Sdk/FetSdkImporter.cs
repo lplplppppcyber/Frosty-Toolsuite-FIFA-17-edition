@@ -134,16 +134,36 @@ namespace Frosty.Core.Sdk
                 bool isArray    = Convert.ToBoolean(fieldMeta.ConstructorArguments[3].Value);
                 int arrayFlags  = ToInt(fieldMeta.ConstructorArguments[4].Value);
 
+                int fType = (fFlags >> 4) & 0x1F;
+
                 DbObject f = DbObject.CreateObject();
                 f.SetValue("name", prop.Name);
-                f.SetValue("type", (fFlags >> 4) & 0x1F);
+                f.SetValue("type", fType);
                 f.SetValue("flags", fFlags);
                 f.SetValue("offset", fOffset);
                 f.SetValue("arrayFlags", arrayFlags);
                 f.SetValue("index", index++);
 
-                if (baseTypeV is TypeReference btr)
-                    f.SetValue("baseType", Clean(btr.Name));
+                // baseType is required for Struct/Enum (it IS the field type) and used in the
+                // attribute for Pointer/Array. FET puts the target in EbxFieldMeta.BaseType for
+                // pointers/arrays, but for structs/enums the type is the property's own type and
+                // the attribute arg is null — so fall back to the declared property type.
+                if (fType == 2 /*Struct*/ || fType == 3 /*Pointer*/ || fType == 8 /*Enum*/ || fType == 4 /*Array*/)
+                {
+                    string baseTypeName = null;
+                    if (baseTypeV is TypeReference btr)
+                        baseTypeName = btr.Name;
+                    else
+                    {
+                        TypeReference pt = prop.PropertyType;
+                        if (pt is GenericInstanceType git && git.GenericArguments.Count >= 1)
+                            pt = git.GenericArguments[git.GenericArguments.Count - 1]; // List<T> element
+                        if (pt != null)
+                            baseTypeName = pt.Name;
+                    }
+                    if (!string.IsNullOrEmpty(baseTypeName) && baseTypeName != "PointerRef")
+                        f.SetValue("baseType", Clean(baseTypeName));
+                }
 
                 CustomAttribute hash = FindAttr(prop.CustomAttributes, "HashAttribute");
                 if (hash != null)
@@ -202,7 +222,13 @@ namespace Frosty.Core.Sdk
 
         private static int ToInt(object v) => v == null ? 0 : Convert.ToInt32(v);
 
-        private static string Clean(string n) => n.Replace(':', '_');
+        private static string Clean(string n)
+        {
+            if (string.IsNullOrEmpty(n)) return n;
+            int tick = n.IndexOf('`');           // strip generic arity suffix (e.g. List`1)
+            if (tick >= 0) n = n.Substring(0, tick);
+            return n.Replace(':', '_').Replace('/', '_');
+        }
 
         private static bool IsRootBase(string baseName)
             => baseName == "Object" || baseName == "ValueType" || baseName == "Enum" || baseName == "Attribute";
