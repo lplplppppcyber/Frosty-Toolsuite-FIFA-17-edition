@@ -739,17 +739,51 @@ namespace FrostySdk.Managers
                     Console.WriteLine(entry.Name);
 #endif
 
-                // FC26: the EBX binary format is unsupported and type resolution
-                // requires the SDK (blocked by EAAC). Keep the bundle-provided name
-                // so the asset tree is browsable, assign a placeholder type and a
-                // deterministic GUID, and skip the binary parse.
+                // FC26: RIFF EBX. Attempt a real parse to recover the proper type and
+                // file GUID (requires the converted FET SDK to be loaded). If the parse
+                // fails for any reason, fall back to a browsable placeholder entry with a
+                // deterministic name-based GUID so the asset tree still loads.
                 if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
                 {
-                    entry.Type = "EbxAsset";
-                    using (var md5 = System.Security.Cryptography.MD5.Create())
-                        entry.Guid = new Guid(md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(entry.Name)));
-                    if (!ebxGuidList.ContainsKey(entry.Guid))
-                        ebxGuidList.Add(entry.Guid, entry);
+                    bool parsed = false;
+                    try
+                    {
+                        Stream fc26Stream = GetEbxStream(entry);
+                        if (fc26Stream != null)
+                        {
+                            using (EbxReader reader = EbxReader.CreateReader(fc26Stream, fs, false))
+                            {
+                                if (!string.IsNullOrEmpty(reader.RootType) && reader.FileGuid != Guid.Empty)
+                                {
+                                    entry.Type = reader.RootType;
+                                    entry.Guid = reader.FileGuid;
+                                    foreach (EbxImportReference import in reader.imports)
+                                    {
+                                        if (!entry.ContainsDependency(import.FileGuid))
+                                            entry.DependentAssets.Add(import.FileGuid);
+                                    }
+                                    if (!ebxGuidList.ContainsKey(entry.Guid))
+                                    {
+                                        ebxGuidList.Add(entry.Guid, entry);
+                                        parsed = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        parsed = false;
+                    }
+
+                    if (!parsed)
+                    {
+                        entry.Type = "EbxAsset";
+                        using (var md5 = System.Security.Cryptography.MD5.Create())
+                            entry.Guid = new Guid(md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(entry.Name)));
+                        if (!ebxGuidList.ContainsKey(entry.Guid))
+                            ebxGuidList.Add(entry.Guid, entry);
+                    }
 
                     count++;
                     WriteToLog("Initial load - Indexing data ({0}%)", (int)((count / (double)assetCount) * 100.0));

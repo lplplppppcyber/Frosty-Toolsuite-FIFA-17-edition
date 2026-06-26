@@ -725,20 +725,13 @@ namespace FrostyEditor
             if (asset.Type == "EncryptedAsset")
                 return;
 
-            // FC26: the type SDK can now be imported from FET, but the RIFF EBX reader
-            // needed to actually parse FC26 asset data isn't implemented yet, so opening
-            // an asset would crash. Block it cleanly until the reader lands.
-            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+            // FC26: opening an asset parses RIFF EBX, which needs the converted FET type SDK.
+            // Without the SDK there are no types to resolve fields against, so block cleanly.
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26 && TypeLibrary.GetSdkVersion() == 0)
             {
-                if (TypeLibrary.GetSdkVersion() == 0)
-                    FrostyMessageBox.Show(
-                        "FC26 type SDK not loaded. Use Tools → Import FET FC26 SDK, then restart.",
-                        "Frosty Editor");
-                else
-                    FrostyMessageBox.Show(
-                        "FC26 SDK is loaded, but reading FC26 asset data (RIFF EBX) isn't implemented yet, " +
-                        "so assets can't be opened. You can browse the asset tree for now.",
-                        "Frosty Editor");
+                FrostyMessageBox.Show(
+                    "FC26 type SDK not loaded. Use Tools → Import FET FC26 SDK, then restart.",
+                    "Frosty Editor");
                 return;
             }
 

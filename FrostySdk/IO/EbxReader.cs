@@ -1420,7 +1420,13 @@ namespace FrostySdk.IO
         { 
             get
             {
-                Type type = TypeLibrary.GetType(classGuids[instances[0].ClassRef]);
+                if (instances.Count == 0)
+                    return "";
+                // RIFF resolves the root via the derived type-info guid; legacy via classGuids.
+                Guid typeGuid = magic == EbxVersion.Riff
+                    ? typeInfoGuids[instances[0].ClassRef]
+                    : classGuids[instances[0].ClassRef];
+                Type type = TypeLibrary.GetType(typeGuid);
                 return type != null ? type.Name : "";
             }
         }
