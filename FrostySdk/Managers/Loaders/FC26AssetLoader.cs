@@ -119,6 +119,7 @@ namespace FrostySdk.Managers
                 List<TocBundleMeta>    bundles    = new List<TocBundleMeta>();
                 List<TocChunkMeta>     tocChunks  = new List<TocChunkMeta>();
                 List<InlineBundleMeta> casBundles = new List<InlineBundleMeta>();
+                int fnvLogCount = 0;
 
                 // ----------------------------------------------------------------
                 // Parse TOC file
@@ -292,6 +293,11 @@ namespace FrostySdk.Managers
                                 r.ReadByte(); // extra byte
                                 casIdx = r.ReadByte();
                                 int ci = parent.fs.GetCatalogIndexFromFNV1(fnv1);
+                                if (fnvLogCount < 3)
+                                {
+                                    log?.AppendLine($"    fnv1=0x{fnv1:X8} ({fnv1}) -> catIdx={ci} casIdx={casIdx} patch={isInPatch}");
+                                    fnvLogCount++;
+                                }
                                 catIdx = ci >= 0 ? ci : 0;
                             }
 
@@ -397,7 +403,13 @@ namespace FrostySdk.Managers
                     if (dbObj == null)
                     {
                         casNullObj++;
-                        if (casNullObj <= 2) log?.AppendLine($"    cas NULLOBJ name={ib.Name} blen={blen} boff={boff}");
+                        if (casNullObj <= 2)
+                        {
+                            uint gotMagic = bundleData.Length >= 4
+                                ? (uint)((bundleData[0] << 24) | (bundleData[1] << 16) | (bundleData[2] << 8) | bundleData[3])
+                                : 0;
+                            log?.AppendLine($"    cas NULLOBJ name={ib.Name} cat={ib.CatalogIndex} cas={ib.CasIndex} patch={ib.InPatch} blen={blen} boff={boff} gotMagic=0x{gotMagic:X8} expect=0xD6A03D9D resolved={resolved}");
+                        }
                         continue;
                     }
 
