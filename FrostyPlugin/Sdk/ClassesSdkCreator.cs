@@ -345,11 +345,12 @@ namespace Frosty.Core.Sdk
             compilerParams.ReferencedAssemblies.Add("FrostySdk.dll");
 
             CompilerResults results = provider.CompileAssemblyFromFile(compilerParams, "temp.cs");
-            File.Delete("temp.cs");
 
 #if FROSTY_ALPHA || FROSTY_DEVELOPER
             if (results.Errors.Count > 0)
             {
+                // Preserve the generated source so failing lines can be inspected.
+                try { File.Copy("temp.cs", "temp_sdk_source.cs", true); } catch { }
                 using (NativeWriter writer = new NativeWriter(new FileStream("Errors.txt", FileMode.Create)))
                 {
                     foreach (CompilerError error in results.Errors)
@@ -359,6 +360,7 @@ namespace Frosty.Core.Sdk
                 }
             }
 #endif
+            File.Delete("temp.cs");
         }
 
         private string WriteEnum(DbObject enumObj)
