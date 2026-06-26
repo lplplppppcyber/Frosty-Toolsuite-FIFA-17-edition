@@ -62,22 +62,21 @@ namespace FrostySdk.IO
             // We don't seek back, so V3 is not handled (layout.toc is V0/V1).
         }
 
-        // Reads one entry: prefix byte → type + optional name → typed value.
-        // Returns false if type is Invalid (terminator).
+        // Reads one entry: prefix byte → type check → optional name → typed value.
+        // TypeInvalid is checked BEFORE reading the name (matches fetsource TocReader exactly).
         private bool ReadEntry(NativeReader reader, out string name, out object value)
         {
             int prefix = reader.ReadByte();
             int type   = prefix & 0x1F;
 
-            name = string.Empty;
-            if ((prefix & 0x80) == 0)
-                name = reader.ReadNullTerminatedString();
+            name  = string.Empty;
+            value = null;
 
             if (type == TypeInvalid)
-            {
-                value = null;
                 return false;
-            }
+
+            if ((prefix & 0x80) == 0)
+                name = reader.ReadNullTerminatedString();
 
             value = ReadValue(reader, type);
             return true;
