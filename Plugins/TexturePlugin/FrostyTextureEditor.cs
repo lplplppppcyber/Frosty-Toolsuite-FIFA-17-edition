@@ -131,8 +131,9 @@ namespace TexturePlugin
                     textureIsSRGB = textureAsset.PixelFormat.Contains("SRGB") || ((textureAsset.Flags & TextureFlags.SrgbGamma) != 0);
                     renderer.Screen = new TextureScreen(textureAsset);
                 }
-                catch 
+                catch (Exception ex)
                 {
+                    try { System.IO.File.WriteAllText("fc26_texture_debug.txt", "resRid=" + resRid + "\r\n" + ex); } catch { }
                     renderer.Screen = new TextureScreen();
                     return;
                 }
