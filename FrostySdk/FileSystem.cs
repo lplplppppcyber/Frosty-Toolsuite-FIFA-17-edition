@@ -409,6 +409,14 @@ namespace FrostySdk
                 return;
             }
 
+            // Dump first 32 bytes of layout files so we can identify the magic
+            string hexPath = patchLayoutPath != "" ? patchLayoutPath : baseLayoutPath;
+            byte[] hdr = new byte[32];
+            using (var fs = new FileStream(hexPath, FileMode.Open, FileAccess.Read))
+                fs.Read(hdr, 0, hdr.Length);
+            log.AppendLine("[FC26] First 32 bytes of " + Path.GetFileName(hexPath) + ":");
+            log.AppendLine(BitConverter.ToString(hdr));
+
             FC26TocReader tocReader = new FC26TocReader();
 
             if (patchLayoutPath != "")
