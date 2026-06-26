@@ -14,7 +14,8 @@ namespace Frosty.Core.IO
 
     public class MemoryReader : IDisposable
     {
-        private const int PROCESS_WM_READ = 0x0010; // PROCESS_VM_READ
+        // PROCESS_VM_READ (0x10) | PROCESS_VM_OPERATION (0x08) — the latter is required for VirtualProtectEx.
+        private const int PROCESS_WM_READ = 0x0018;
 
         [DllImport("kernel32.dll")]
         private static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
@@ -139,8 +140,12 @@ namespace Frosty.Core.IO
         {
             byte[] outBuffer = new byte[numBytes];
             int bytesRead = 0;
+            uint oldProtect = 0;
 
-            if (!ReadProcessMemory(handle, position, outBuffer, numBytes, ref bytesRead))
+            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 2u /* PAGE_READONLY */, ref oldProtect);
+            bool ok = ReadProcessMemory(handle, position, outBuffer, numBytes, ref bytesRead);
+            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
+            if (!ok)
                 return null;
 
             position += numBytes;
@@ -221,7 +226,11 @@ namespace Frosty.Core.IO
         protected virtual void FillBuffer(int numBytes)
         {
             int bytesRead = 0;
+            uint oldProtect = 0;
+            // Force the page readable before reading (defeats EAAC .data page guards), then restore.
+            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), 2u /* PAGE_READONLY */, ref oldProtect);
             ReadProcessMemory(handle, position, buffer, numBytes, ref bytesRead);
+            VirtualProtectEx(handle, position, new UIntPtr((uint)numBytes), oldProtect, ref oldProtect);
             position += numBytes;
         }
     }
