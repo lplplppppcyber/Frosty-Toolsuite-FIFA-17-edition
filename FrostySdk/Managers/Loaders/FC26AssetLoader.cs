@@ -60,7 +60,9 @@ namespace FrostySdk.Managers
             private const uint FlagMemoryResident = 0x80000000u;
             private const uint FlagInlineRead     = 0x40000000u;
             private const int  TocHeaderSize      = 556;
-            private const uint BundleMagicF21     = 0xD6A03D9Du;
+            // FC26 bundle meta magic. FIFA21 used 0xD6A03D9D; FC26 changed the two
+            // middle bytes to 0xD68E799D (verified: TotalCount == Ebx+Res+Chunk counts).
+            private const uint BundleMagicF21     = 0xD68E799Du;
             private const int  SuperBundleMagic   = 32;
 
             // -----------------------------------------------------------------------
