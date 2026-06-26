@@ -1690,6 +1690,37 @@ namespace FrostySdk.IO
 
             Position = payloadOffset;
             isValid = true;
+
+            try
+            {
+                // Cap the debug log so full-asset indexing can't flood it.
+                if (File.Exists("fc26_riff_debug.txt") && new FileInfo("fc26_riff_debug.txt").Length > 256 * 1024)
+                    return;
+                System.Text.StringBuilder dbg = new System.Text.StringBuilder();
+                dbg.AppendLine("---- [RIFF] len=" + Length + " payloadOffset=" + payloadOffset
+                    + " ebxdSize=" + chunkSize + " stringsOffset=" + stringsOffset);
+                dbg.AppendLine("[RIFF] classGuids=" + classGuids.Count + " signatures=" + signatures.Count
+                    + " typeInfoGuids=" + typeInfoGuids.Count + " imports=" + imports.Count);
+                dbg.AppendLine("[RIFF] exportedInstances=" + exportedInstancesCount
+                    + " dataContainers=" + dataContainerOffsets.Count
+                    + " arrays=" + arrCount + " boxedValues=" + boxedValueCount
+                    + " instances=" + instances.Count);
+                for (int i = 0; i < instances.Count && i < 6; i++)
+                {
+                    int cr = instances[i].ClassRef;
+                    Guid tg = cr < typeInfoGuids.Count ? typeInfoGuids[cr] : Guid.Empty;
+                    Type t = tg != Guid.Empty ? TypeLibrary.GetType(tg) : null;
+                    dbg.AppendLine("  inst[" + i + "] classRef=" + cr + " typeInfoGuid=" + tg
+                        + " -> " + (t != null ? t.Name : "<null>"));
+                }
+                if (instances.Count == 0)
+                {
+                    for (int i = 0; i < classGuids.Count && i < 6; i++)
+                        dbg.AppendLine("  classGuid[" + i + "]=" + classGuids[i]);
+                }
+                File.AppendAllText("fc26_riff_debug.txt", dbg.ToString());
+            }
+            catch { }
         }
 
         internal override void InternalReadObjects()
