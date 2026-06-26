@@ -69,6 +69,9 @@ namespace FrostySdk.Managers
 
             public void Load(AssetManager parent, BinarySbDataHelper helper)
             {
+                var loadLog = new System.Text.StringBuilder();
+                int tocFound = 0, tocLoaded = 0;
+
                 foreach (CatalogInfo catalog in parent.fs.EnumerateCatalogInfos())
                 {
                     foreach (string sbName in catalog.SuperBundles.Keys)
@@ -84,12 +87,17 @@ namespace FrostySdk.Managers
                         string patchToc = parent.fs.ResolvePath("native_patch/" + sbPath + ".toc");
                         string baseToc  = parent.fs.ResolvePath("native_data/"  + sbPath + ".toc");
 
-                        if (patchToc != "")
-                            ReadToc(patchToc, Path.ChangeExtension(patchToc, ".sb"), sbIndex, parent, helper);
-                        if (baseToc != "")
-                            ReadToc(baseToc, Path.ChangeExtension(baseToc, ".sb"), sbIndex, parent, helper);
+                        loadLog.AppendLine($"SB={sbName} split={catalog.SuperBundles[sbName]} sbPath={sbPath}");
+                        loadLog.AppendLine($"  patchToc={patchToc}");
+                        loadLog.AppendLine($"  baseToc={baseToc}");
+
+                        if (patchToc != "") { tocFound++; ReadToc(patchToc, Path.ChangeExtension(patchToc, ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
+                        if (baseToc  != "") { tocFound++; ReadToc(baseToc,  Path.ChangeExtension(baseToc,  ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
                     }
                 }
+
+                loadLog.Insert(0, $"[FC26 Loader] tocFound={tocFound} tocLoaded={tocLoaded} bundles={parent.bundles.Count}\n");
+                System.IO.File.WriteAllText("fc26_loader_debug.txt", loadLog.ToString());
             }
 
             // -----------------------------------------------------------------------
@@ -97,7 +105,8 @@ namespace FrostySdk.Managers
             // -----------------------------------------------------------------------
 
             private void ReadToc(string tocPath, string sbPath, int sbIndex,
-                                  AssetManager parent, BinarySbDataHelper helper)
+                                  AssetManager parent, BinarySbDataHelper helper,
+                                  System.Text.StringBuilder log, ref int loaded)
             {
                 List<TocBundleMeta>    bundles    = new List<TocBundleMeta>();
                 List<TocChunkMeta>     tocChunks  = new List<TocChunkMeta>();
@@ -112,8 +121,13 @@ namespace FrostySdk.Managers
                     r.Position = TocHeaderSize;
 
                     uint bundleTableOff = r.ReadUInt(Endian.Big);
+                    log?.AppendLine($"  ReadToc {System.IO.Path.GetFileName(tocPath)}: bundleTableOff={bundleTableOff}");
                     if (bundleTableOff != 60)
+                    {
+                        log?.AppendLine($"    -> SKIPPED (expected 60)");
                         return; // not a valid FC26 TOC
+                    }
+                    loaded++;
 
                     uint bundleDataOff  = r.ReadUInt(Endian.Big);
                     int  bundleCount    = r.ReadInt(Endian.Big);
