@@ -2304,10 +2304,9 @@ namespace FrostySdk.Managers
                 WriteToLog("Writing to cache (EBX)");
 
                 writer.Write(ebxList.Values.Count);
-                for (int i = 0; i < ebxList.Count; i++)
+                int ebxIdx = 0, ebxTotal = ebxList.Count;
+                foreach (EbxAssetEntry ebx in ebxList.Values)
                 {
-                    EbxAssetEntry ebx = ebxList.Values.ElementAt(i);
-
                     writer.WriteNullTerminatedString(ebx.Name);
                     writer.Write(ebx.Sha1);
                     writer.Write(ebx.Size);
@@ -2337,16 +2336,16 @@ namespace FrostySdk.Managers
                         writer.Write(dependencyGuid);
                     }
 
-                    WriteToLog(string.Format("progress:{0}", (double)i / (double)ebxList.Count * 100.0));
+                    if ((ebxIdx++ & 0xFF) == 0)
+                        WriteToLog(string.Format("progress:{0}", (double)ebxIdx / (double)ebxTotal * 100.0));
                 }
 
                 WriteToLog("Writing to cache (RES)");
 
                 writer.Write(resList.Values.Count);
-                for (int i = 0; i < resList.Count; i++)
+                int resIdx = 0, resTotal = resList.Count;
+                foreach (ResAssetEntry res in resList.Values)
                 {
-                    ResAssetEntry res = resList.Values.ElementAt(i);
-
                     writer.WriteNullTerminatedString(res.Name);
                     writer.Write(res.Sha1);
                     writer.Write(res.Size);
@@ -2373,16 +2372,16 @@ namespace FrostySdk.Managers
                         writer.Write(baseBundleId);
                     }
 
-                    WriteToLog(string.Format("progress:{0}", (double)i / (double)resList.Count * 100.0));
+                    if ((resIdx++ & 0xFF) == 0)
+                        WriteToLog(string.Format("progress:{0}", (double)resIdx / (double)resTotal * 100.0));
                 }
 
                 WriteToLog("Writing to cache (CHUNK)");
 
                 writer.Write(chunkList.Count);
-                for (int i = 0; i < chunkList.Count; i++)
+                int chunkIdx = 0, chunkTotal = chunkList.Count;
+                foreach (ChunkAssetEntry chunk in chunkList.Values)
                 {
-                    ChunkAssetEntry chunk = chunkList.Values.ElementAt(i);
-
                     writer.Write(chunk.Id);
                     writer.Write(chunk.Sha1);
                     writer.Write(chunk.Size);
@@ -2411,7 +2410,8 @@ namespace FrostySdk.Managers
                         writer.Write(baseBundleId);
                     }
 
-                    WriteToLog(string.Format("progress:{0}", (double)i / (double)chunkList.Count * 100.0));
+                    if ((chunkIdx++ & 0xFF) == 0)
+                        WriteToLog(string.Format("progress:{0}", (double)chunkIdx / (double)chunkTotal * 100.0));
                 }
             }
         }
