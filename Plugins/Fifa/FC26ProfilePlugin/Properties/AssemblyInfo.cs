@@ -12,3 +12,4 @@ using System.Runtime.InteropServices;
 [assembly: PluginVersion("1.0.0.0")]
 
 [assembly: RegisterProfile(typeof(FC26Profile))]
+[assembly: RegisterMenuExtension(typeof(FetSdkMenuExtension))]
