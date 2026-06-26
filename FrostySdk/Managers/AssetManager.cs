@@ -475,7 +475,7 @@ namespace FrostySdk.Managers
                 if (!Directory.Exists(fi.DirectoryName))
                     Directory.CreateDirectory(fi.DirectoryName);
 
-                using (NativeWriter writer = new NativeWriter(new FileStream(fi.FullName, FileMode.Create)))
+                using (NativeWriter writer = new NativeWriter(new FileStream(fi.FullName, FileMode.Create, FileAccess.Write, FileShare.None, 4 * 1024 * 1024)))
                 {
                     foreach (KeyValuePair<string, byte[]> kvp in ebxDataFiles)
                     {
@@ -2267,7 +2267,7 @@ namespace FrostySdk.Managers
             if (!Directory.Exists(fi.DirectoryName))
                 Directory.CreateDirectory(fi.DirectoryName);
 
-            using (NativeWriter writer = new NativeWriter(new FileStream(fi.FullName, FileMode.Create)))
+            using (NativeWriter writer = new NativeWriter(new FileStream(fi.FullName, FileMode.Create, FileAccess.Write, FileShare.None, 4 * 1024 * 1024)))
             {
                 writer.Write(CacheMagic);
                 writer.Write(CacheVersion);
