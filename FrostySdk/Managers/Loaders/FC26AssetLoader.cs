@@ -408,7 +408,18 @@ namespace FrostySdk.Managers
                             uint gotMagic = bundleData.Length >= 4
                                 ? (uint)((bundleData[0] << 24) | (bundleData[1] << 16) | (bundleData[2] << 8) | bundleData[3])
                                 : 0;
-                            log?.AppendLine($"    cas NULLOBJ name={ib.Name} cat={ib.CatalogIndex} cas={ib.CasIndex} patch={ib.InPatch} blen={blen} boff={boff} gotMagic=0x{gotMagic:X8} expect=0xD6A03D9D resolved={resolved}");
+                            // Dump a 48-byte window starting 8 bytes BEFORE BundleOffset so we can see
+                            // exactly where the real magic D6-A0-3D-9D sits relative to our read point.
+                            long windowStart = ib.BundleOffset - 8;
+                            if (windowStart < 0) windowStart = 0;
+                            byte[] win = new byte[48];
+                            using (FileStream wfs = new FileStream(resolved, FileMode.Open, FileAccess.Read))
+                            {
+                                wfs.Seek(windowStart, SeekOrigin.Begin);
+                                wfs.Read(win, 0, 48);
+                            }
+                            log?.AppendLine($"    cas NULLOBJ name={ib.Name} cat={ib.CatalogIndex} cas={ib.CasIndex} patch={ib.InPatch} rawBundleOff={ib.BundleOffset} rawBundleLen={ib.BundleLength} blen={blen} boff={boff} gotMagic=0x{gotMagic:X8} expect=0xD6A03D9D resolved={resolved}");
+                            log?.AppendLine($"      window@{windowStart} (BundleOffset-8): {BitConverter.ToString(win)}");
                         }
                         continue;
                     }
