@@ -150,6 +150,7 @@ namespace FrostySdk.Managers
                     int  tocFlags       = r.ReadInt(Endian.Big);
 
                     bool compressedStrings = (tocFlags & 4) != 0;
+                    log?.AppendLine($"    bundleCount={bundleCount} chunkCount={chunkCount} tocFlags={tocFlags} bundleDataOff={bundleDataOff} dataOffset={dataOffset} namesOffset={namesOffset} compressedStrings={compressedStrings}");
 
                     int namesCount          = 0;
                     int decodeTableSize     = 0;
@@ -359,31 +360,46 @@ namespace FrostySdk.Managers
                 // ----------------------------------------------------------------
                 // CAS (inline) bundles
                 // ----------------------------------------------------------------
+                int casNoResolve = 0, casBadLen = 0, casShortRead = 0, casNullObj = 0, casOk = 0;
                 foreach (InlineBundleMeta ib in casBundles)
                 {
                     string casPath = parent.fs.GetFilePath(ib.CatalogIndex, ib.CasIndex, ib.InPatch);
                     string resolved = parent.fs.ResolvePath(casPath);
                     if (string.IsNullOrEmpty(resolved) || !File.Exists(resolved))
+                    {
+                        casNoResolve++;
+                        if (casNoResolve <= 2) log?.AppendLine($"    cas NORESOLVE cat={ib.CatalogIndex} cas={ib.CasIndex} patch={ib.InPatch} path={casPath} resolved={resolved}");
                         continue;
+                    }
 
                     int  blen = ib.BundleLength - 4;
                     long boff = ib.BundleOffset + 4;
                     if (blen <= 0)
+                    {
+                        casBadLen++;
                         continue;
+                    }
 
                     byte[] bundleData = new byte[blen];
                     using (FileStream casFs = new FileStream(resolved, FileMode.Open, FileAccess.Read))
                     {
                         casFs.Seek(boff, SeekOrigin.Begin);
                         if (casFs.Read(bundleData, 0, blen) != blen)
+                        {
+                            casShortRead++;
                             continue;
+                        }
                     }
 
                     DbObject dbObj;
                     using (MemoryStream ms = new MemoryStream(bundleData))
                         dbObj = ReadBundleF21(ms);
                     if (dbObj == null)
+                    {
+                        casNullObj++;
+                        if (casNullObj <= 2) log?.AppendLine($"    cas NULLOBJ name={ib.Name} blen={blen} boff={boff}");
                         continue;
+                    }
 
                     AddCasLocations(dbObj, ib.Entries);
 
@@ -392,7 +408,9 @@ namespace FrostySdk.Managers
                     parent.ProcessBundleEbx(dbObj, bid, helper);
                     parent.ProcessBundleRes(dbObj, bid, helper);
                     parent.ProcessBundleChunks(dbObj, bid, helper);
+                    casOk++;
                 }
+                log?.AppendLine($"    SUMMARY bundles={bundles.Count} casBundles={casBundles.Count} tocChunks={tocChunks.Count} casOk={casOk} noResolve={casNoResolve} badLen={casBadLen} shortRead={casShortRead} nullObj={casNullObj}");
 
                 // ----------------------------------------------------------------
                 // TOC-level chunks
