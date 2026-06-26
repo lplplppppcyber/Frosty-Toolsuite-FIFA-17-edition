@@ -128,6 +128,12 @@ namespace Frosty.Core.Sdk
                 if (fieldMeta == null || fieldMeta.ConstructorArguments.Count < 5)
                     continue;
 
+                // Skip FET's synthetic annotation members (__Id, __InstanceGuid, __Guid).
+                // Frosty's ModuleWriter re-injects these itself; emitting them too causes
+                // "already contains a definition" duplicate-member compile errors.
+                if (prop.Name.StartsWith("__"))
+                    continue;
+
                 int fFlags      = ToInt(fieldMeta.ConstructorArguments[0].Value);
                 int fOffset     = ToInt(fieldMeta.ConstructorArguments[1].Value);
                 object baseTypeV = fieldMeta.ConstructorArguments[2].Value; // TypeReference or null
