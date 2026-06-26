@@ -72,28 +72,36 @@ namespace FrostySdk.Managers
                 var loadLog = new System.Text.StringBuilder();
                 int tocFound = 0, tocLoaded = 0;
 
+                // Collect all (catalog, sbName) pairs first so we can report progress
+                var work = new List<(CatalogInfo catalog, string sbName)>();
                 foreach (CatalogInfo catalog in parent.fs.EnumerateCatalogInfos())
-                {
                     foreach (string sbName in catalog.SuperBundles.Keys)
-                    {
-                        parent.WriteToLog("Loading FC26 Data ({0})", sbName);
+                        work.Add((catalog, sbName));
 
-                        int sbIndex = GetOrAddSuperBundle(parent, sbName);
+                int total = work.Count;
+                for (int wi = 0; wi < total; wi++)
+                {
+                    CatalogInfo catalog = work[wi].catalog;
+                    string      sbName  = work[wi].sbName;
 
-                        string sbPath = sbName;
-                        if (catalog.SuperBundles[sbName])
-                            sbPath = sbName.Replace("win32", catalog.Name);
+                    parent.WriteToLog("Building FC26 cache ({0}/{1}): {2}", wi + 1, total, sbName);
+                    parent.WriteToLog("progress:{0}", (double)(wi + 1) / total * 100.0);
 
-                        string patchToc = parent.fs.ResolvePath("native_patch/" + sbPath + ".toc");
-                        string baseToc  = parent.fs.ResolvePath("native_data/"  + sbPath + ".toc");
+                    int sbIndex = GetOrAddSuperBundle(parent, sbName);
 
-                        loadLog.AppendLine($"SB={sbName} split={catalog.SuperBundles[sbName]} sbPath={sbPath}");
-                        loadLog.AppendLine($"  patchToc={patchToc}");
-                        loadLog.AppendLine($"  baseToc={baseToc}");
+                    string sbPath = sbName;
+                    if (catalog.SuperBundles[sbName])
+                        sbPath = sbName.Replace("win32", catalog.Name);
 
-                        if (patchToc != "") { tocFound++; ReadToc(patchToc, Path.ChangeExtension(patchToc, ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
-                        if (baseToc  != "") { tocFound++; ReadToc(baseToc,  Path.ChangeExtension(baseToc,  ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
-                    }
+                    string patchToc = parent.fs.ResolvePath("native_patch/" + sbPath + ".toc");
+                    string baseToc  = parent.fs.ResolvePath("native_data/"  + sbPath + ".toc");
+
+                    loadLog.AppendLine($"SB={sbName} split={catalog.SuperBundles[sbName]} sbPath={sbPath}");
+                    loadLog.AppendLine($"  patchToc={patchToc}");
+                    loadLog.AppendLine($"  baseToc={baseToc}");
+
+                    if (patchToc != "") { tocFound++; ReadToc(patchToc, Path.ChangeExtension(patchToc, ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
+                    if (baseToc  != "") { tocFound++; ReadToc(baseToc,  Path.ChangeExtension(baseToc,  ".sb"), sbIndex, parent, helper, loadLog, ref tocLoaded); }
                 }
 
                 loadLog.Insert(0, $"[FC26 Loader] tocFound={tocFound} tocLoaded={tocLoaded} bundles={parent.bundles.Count}\n");

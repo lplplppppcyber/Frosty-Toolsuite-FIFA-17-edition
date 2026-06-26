@@ -460,8 +460,50 @@ namespace FrostySdk
 
             log.AppendLine("[FC26] catalogs count: " + catalogs.Count);
             log.AppendLine("[FC26] superBundles count: " + superBundles.Count);
-            foreach (var cat in catalogs)
-                log.AppendLine("[FC26] catalog: " + cat.Name + " sb=" + cat.SuperBundles.Count);
+
+            // Log top-level superBundles list (actual TOC paths may differ from installChunk names)
+            DbObject sbListTop = (patchLayout ?? baseLayout)?.GetValue<DbObject>("superBundles");
+            if (sbListTop != null)
+            {
+                log.AppendLine("[FC26] top-level superBundles entries: " + sbListTop.Count);
+                int sbLogMax = Math.Min(sbListTop.Count, 10);
+                for (int si = 0; si < sbLogMax; si++)
+                {
+                    object entry = null;
+                    int idx = 0;
+                    foreach (object o in sbListTop) { if (idx++ == si) { entry = o; break; } }
+                    if (entry is DbObject sbo)
+                        log.AppendLine("  [" + si + "] keys=" + string.Join(",", sbo.EnumerateKeys()) + " name=" + sbo.GetValue<string>("name"));
+                    else if (entry is string s)
+                        log.AppendLine("  [" + si + "] string=" + s);
+                    else
+                        log.AppendLine("  [" + si + "] type=" + (entry?.GetType().Name ?? "null"));
+                }
+            }
+
+            // Probe where a known superbundle .toc actually lives
+            string probeSb = superBundles.Count > 0 ? superBundles[0] : "win32/globals";
+            string[] probeExts = { ".toc", ".sb" };
+            string[] probePrefixes = { "native_patch/", "native_data/", "" };
+            log.AppendLine("[FC26] Probing filesystem for sb=" + probeSb);
+            foreach (string px in probePrefixes)
+            {
+                string attempted = BasePath.TrimEnd('\\', '/') + "\\" +
+                    (px.Replace("native_patch/", "patch\\").Replace("native_data/", "data\\")) +
+                    probeSb.Replace("/", "\\") + ".toc";
+                log.AppendLine("  exists=" + File.Exists(attempted) + "  " + attempted);
+            }
+            // Also list actual files in patch\win32 and data\win32 if they exist
+            foreach (string dir in new[] { "patch\\win32", "data\\win32", "patch\\Win32", "data\\Win32" })
+            {
+                string d = BasePath + dir;
+                if (Directory.Exists(d))
+                {
+                    log.AppendLine("[FC26] Contents of " + d + ":");
+                    foreach (string f in Directory.GetFileSystemEntries(d))
+                        log.AppendLine("  " + f);
+                }
+            }
 
             File.WriteAllText("fc26_debug.txt", log.ToString());
         }
