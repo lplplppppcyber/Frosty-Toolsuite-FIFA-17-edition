@@ -16,12 +16,12 @@ using System.Windows.Media;
 
 namespace DuplicationPlugin
 {
-    public class DuplicateFolderMenuExtension : MenuExtension
+    public class DuplicateTeamKitsMenuExtension : MenuExtension
     {
         private readonly Dictionary<string, DuplicationTool.DuplicateAssetExtension> extensions
             = new Dictionary<string, DuplicationTool.DuplicateAssetExtension>();
 
-        public DuplicateFolderMenuExtension()
+        public DuplicateTeamKitsMenuExtension()
         {
             foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
             {
@@ -37,7 +37,7 @@ namespace DuplicationPlugin
 
         public override string TopLevelMenuName => "Tools";
         public override string SubLevelMenuName => null;
-        public override string MenuItemName => "Duplicate Folder";
+        public override string MenuItemName => "Duplicate Team Kits";
         public override ImageSource Icon => null;
 
         public override RelayCommand MenuItemClicked => new RelayCommand((o) =>
@@ -46,64 +46,69 @@ namespace DuplicationPlugin
             if (entry == null)
             {
                 FrostyMessageBox.Show(
-                    "No asset selected. Select any asset inside the folder you want to duplicate.",
-                    "Folder Duplicator");
+                    "No asset selected. Select any asset inside any kit subfolder of the team you want to duplicate.",
+                    "Team Kit Duplicator");
                 return;
             }
 
-            string sourceFolder = entry.Path.Replace('\\', '/');
-            if (string.IsNullOrEmpty(sourceFolder))
+            // Selected asset path: "content/.../alanyaspor_171/home_0_0"
+            // We need to go up one level to get the team folder.
+            string kitFolder = entry.Path.Replace('\\', '/');
+            if (string.IsNullOrEmpty(kitFolder))
             {
-                FrostyMessageBox.Show("Selected asset has no folder path.", "Folder Duplicator");
+                FrostyMessageBox.Show("Selected asset has no folder path.", "Team Kit Duplicator");
                 return;
             }
 
-            // Strip BRT subfolder suffix if user selected an asset from inside a BRT folder.
-            // e.g. "content/.../ball_999_ball_brt" -> "content/.../ball_999"
-            //      "content/.../ball_999_launch_ball_brt" -> "content/.../ball_999"
-            int slashIdx = sourceFolder.LastIndexOf('/');
-            string folderName = slashIdx >= 0 ? sourceFolder.Substring(slashIdx + 1) : sourceFolder;
-            string folderParent = slashIdx >= 0 ? sourceFolder.Substring(0, slashIdx) : "";
-
-            if (folderName.EndsWith("_brt", StringComparison.OrdinalIgnoreCase))
+            int lastSlash = kitFolder.LastIndexOf('/');
+            if (lastSlash <= 0)
             {
-                string withoutBrt = folderName.Substring(0, folderName.Length - 4);
-                int lastUnderscore = withoutBrt.LastIndexOf('_');
-                if (lastUnderscore > 0)
-                {
-                    string candidate = withoutBrt.Substring(0, lastUnderscore);
-                    if (candidate.EndsWith("_launch", StringComparison.OrdinalIgnoreCase))
-                        candidate = candidate.Substring(0, candidate.Length - 7);
-                    sourceFolder = (folderParent.Length > 0 ? folderParent + "/" : "") + candidate;
-                }
+                FrostyMessageBox.Show(
+                    "Selected asset is not deep enough to detect a team folder.\n" +
+                    "Select an asset inside a kit subfolder (e.g. home_0_0) of the team.",
+                    "Team Kit Duplicator");
+                return;
             }
 
-            DuplicateFolderWindow win = new DuplicateFolderWindow(sourceFolder);
+            string teamFolder = kitFolder.Substring(0, lastSlash);
+
+            string teamFolderName = teamFolder.Substring(teamFolder.LastIndexOf('/') + 1);
+            string oldTeamId = ExtractTrailingId(teamFolderName);
+            if (string.IsNullOrEmpty(oldTeamId))
+            {
+                FrostyMessageBox.Show(
+                    "Could not extract a numeric team ID from '" + teamFolderName + "'.\n" +
+                    "Expected format: teamname_999",
+                    "Team Kit Duplicator");
+                return;
+            }
+
+            DuplicateTeamKitsWindow win = new DuplicateTeamKitsWindow(teamFolder);
             if (win.ShowDialog() != true)
                 return;
 
-            string newFolderName = win.NewFolderName;
+            string newTeamFolderName = win.NewTeamFolderName;
             string destPath = win.DestinationPath;
 
-            FrostyTaskWindow.Show("Duplicating Folder", "", (task) =>
+            FrostyTaskWindow.Show("Duplicating Team Kits", "", (task) =>
             {
                 try
                 {
                     if (!MeshVariationDb.IsLoaded)
                         MeshVariationDb.LoadVariations(task);
 
-                    DuplicateFolder(task, sourceFolder, newFolderName, destPath);
+                    DuplicateTeam(task, teamFolder, newTeamFolderName, destPath);
                 }
                 catch (Exception ex)
                 {
-                    App.Logger.Log("Error duplicating folder: " + ex.ToString());
+                    App.Logger.Log("Error duplicating team kits: " + ex.ToString());
                 }
             });
 
             App.EditorWindow.DataExplorer.RefreshAll();
         });
 
-        public static string ExtractId(string folderName)
+        private static string ExtractTrailingId(string folderName)
         {
             int last = folderName.LastIndexOf('_');
             if (last < 0) return null;
@@ -150,69 +155,50 @@ namespace DuplicationPlugin
             return new PointerRef(r);
         }
 
-        private void DuplicateFolder(FrostyTaskWindow task, string sourceFolder,
-            string newFolderName, string destPath)
+        private void DuplicateTeam(FrostyTaskWindow task, string teamFolder,
+            string newTeamFolderName, string destPath)
         {
-            int srcSlash = sourceFolder.LastIndexOf('/');
-            string sourceFolderName = srcSlash >= 0 ? sourceFolder.Substring(srcSlash + 1) : sourceFolder;
-            string sourceParent = srcSlash >= 0 ? sourceFolder.Substring(0, srcSlash) : "";
-            string newFolder = destPath.TrimEnd('/') + "/" + newFolderName;
+            string teamFolderName = teamFolder.Substring(teamFolder.LastIndexOf('/') + 1);
+            string newTeamFolder = destPath.TrimEnd('/') + "/" + newTeamFolderName;
 
-            string oldId = ExtractId(sourceFolderName);
-            string newId = ExtractId(newFolderName);
-            bool hasIdReplacement = !string.IsNullOrEmpty(oldId)
-                && !string.IsNullOrEmpty(newId)
-                && oldId != newId;
+            string oldTeamId = ExtractTrailingId(teamFolderName);
+            string newTeamId = ExtractTrailingId(newTeamFolderName);
 
-            App.Logger.Log("Folder source: " + sourceFolder);
-            App.Logger.Log("Folder target: " + newFolder);
-            if (hasIdReplacement)
-                App.Logger.Log("  ID replacement: " + oldId + " -> " + newId);
+            if (string.IsNullOrEmpty(oldTeamId) || string.IsNullOrEmpty(newTeamId))
+            {
+                App.Logger.Log("Could not extract team IDs. Aborting.");
+                return;
+            }
 
-            // ── Phase 1: Enumerate ──────────────────────────────────────────────
-            task.Update("Finding assets...");
+            string oldPattern = "_" + oldTeamId + "_";
+            string newPattern = "_" + newTeamId + "_";
+            string oldEnd = "_" + oldTeamId;
+            string newEnd = "_" + newTeamId;
 
-            List<EbxAssetEntry> mainAssets = new List<EbxAssetEntry>();
-            // BRT sibling folders: same parent dir, name starts with sourceFolderName + "_", ends with "_brt"
-            Dictionary<string, List<EbxAssetEntry>> brtFolderMap =
-                new Dictionary<string, List<EbxAssetEntry>>(StringComparer.OrdinalIgnoreCase);
+            App.Logger.Log("Team source: " + teamFolder + " (ID " + oldTeamId + ")");
+            App.Logger.Log("Team target: " + newTeamFolder + " (ID " + newTeamId + ")");
 
-            string sourceFolderNameLower = sourceFolderName.ToLowerInvariant();
+            // ── Phase 1: Enumerate all assets under the team folder ─────────────
+            task.Update("Finding team assets...");
+
+            // Assets whose path starts with teamFolder + "/" belong to this team.
+            // This covers all kit subfolders (home_0_0, away_1_0, third_2_0, etc.).
+            string teamPrefix = teamFolder + "/";
+
+            List<EbxAssetEntry> allAssets = new List<EbxAssetEntry>();
 
             foreach (EbxAssetEntry e in App.AssetManager.EnumerateEbx())
             {
                 string path = e.Path.Replace('\\', '/');
-
-                if (path.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
-                {
-                    mainAssets.Add(e);
-                    continue;
-                }
-
-                // Check for sibling BRT folders: same parent, name = sourceFolderName + "_*_brt"
-                int pathSlash = path.LastIndexOf('/');
-                string pathParent = pathSlash >= 0 ? path.Substring(0, pathSlash) : "";
-                if (!pathParent.Equals(sourceParent, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string siblingName = (pathSlash >= 0 ? path.Substring(pathSlash + 1) : path)
-                    .ToLowerInvariant();
-
-                if (siblingName.StartsWith(sourceFolderNameLower + "_") && siblingName.EndsWith("_brt"))
-                {
-                    if (!brtFolderMap.ContainsKey(path))
-                        brtFolderMap[path] = new List<EbxAssetEntry>();
-                    brtFolderMap[path].Add(e);
-                }
+                if (path.StartsWith(teamPrefix, StringComparison.OrdinalIgnoreCase))
+                    allAssets.Add(e);
             }
 
-            int brtTotal = brtFolderMap.Values.Sum(l => l.Count);
-            App.Logger.Log("Found " + mainAssets.Count + " main assets, "
-                + brtTotal + " BRT assets in " + brtFolderMap.Count + " BRT folder(s)");
+            App.Logger.Log("Found " + allAssets.Count + " assets under team folder");
 
-            if (mainAssets.Count == 0)
+            if (allAssets.Count == 0)
             {
-                App.Logger.Log("No assets found in: " + sourceFolder);
+                App.Logger.Log("No assets found under: " + teamFolder);
                 return;
             }
 
@@ -221,17 +207,31 @@ namespace DuplicationPlugin
             Dictionary<string, string> oldToNewNames = new Dictionary<string, string>();
             List<EbxAssetEntry> allNew = new List<EbxAssetEntry>();
 
-            int total = mainAssets.Count + brtTotal;
             int current = 0;
+            int total = allAssets.Count;
 
-            foreach (EbxAssetEntry src in mainAssets)
+            foreach (EbxAssetEntry src in allAssets)
             {
                 current++;
-                string newFilename = hasIdReplacement
-                    ? src.Filename.Replace(oldId, newId)
-                    : src.Filename;
-                string newAssetName = newFolder + "/" + newFilename;
                 task.Update("Duplicating " + src.Filename + " (" + current + "/" + total + ")...");
+
+                // Compute the relative sub-path within the team folder
+                // e.g. "home_0_0/jersey_171_0_0_color"
+                string srcPath = src.Path.Replace('\\', '/');
+                string relPath = srcPath.Substring(teamPrefix.Length); // e.g. "home_0_0"
+
+                // Rename the filename: replace team ID occurrences surrounded by underscores
+                string newFilename = src.Filename;
+                if (oldPattern != newPattern)
+                {
+                    newFilename = newFilename.Replace(oldPattern, newPattern);
+                    if (newFilename.EndsWith(oldEnd))
+                        newFilename = newFilename.Substring(0, newFilename.Length - oldEnd.Length) + newEnd;
+                }
+
+                // Kit subfolder names don't embed the team ID (home_0_0 stays home_0_0)
+                // so relPath needs no renaming.
+                string newAssetName = newTeamFolder + "/" + relPath + "/" + newFilename;
 
                 EbxAssetEntry newEntry = DuplicateWithExtension(src, newAssetName);
                 if (newEntry != null)
@@ -243,37 +243,6 @@ namespace DuplicationPlugin
                 }
             }
 
-            foreach (KeyValuePair<string, List<EbxAssetEntry>> kvp in brtFolderMap)
-            {
-                string srcBrtFolder = kvp.Key;
-                int brtSlash = srcBrtFolder.LastIndexOf('/');
-                string srcBrtFolderName = brtSlash >= 0
-                    ? srcBrtFolder.Substring(brtSlash + 1)
-                    : srcBrtFolder;
-                // Preserve the suffix after the source folder name (e.g. "_ball_brt")
-                string brtSuffix = srcBrtFolderName.Substring(sourceFolderName.Length);
-                string newBrtFolder = destPath.TrimEnd('/') + "/" + newFolderName + brtSuffix;
-
-                foreach (EbxAssetEntry src in kvp.Value)
-                {
-                    current++;
-                    string newFilename = hasIdReplacement
-                        ? src.Filename.Replace(oldId, newId)
-                        : src.Filename;
-                    string newAssetName = newBrtFolder + "/" + newFilename;
-                    task.Update("Duplicating " + src.Filename + " (" + current + "/" + total + ")...");
-
-                    EbxAssetEntry newEntry = DuplicateWithExtension(src, newAssetName);
-                    if (newEntry != null)
-                    {
-                        oldToNew[src.Guid] = newEntry;
-                        oldToNewNames[src.Name] = newEntry.Name;
-                        allNew.Add(newEntry);
-                        App.Logger.Log("  Duplicated BRT asset: " + src.Name + " -> " + newEntry.Name);
-                    }
-                }
-            }
-
             // ── Phase 3: Fix references ─────────────────────────────────────────
             task.Update("Fixing cross-references...");
             FixCrossReferences(oldToNew, allNew);
@@ -282,10 +251,10 @@ namespace DuplicationPlugin
             if (!Config.Get<bool>("SkipBrtAdd", false))
             {
                 task.Update("Updating BRT entries...");
-                InjectBrtEntries(mainAssets, oldToNewNames);
+                InjectBrtEntries(allAssets, oldToNewNames);
             }
 
-            App.Logger.Log("Folder duplication complete (" + allNew.Count + " assets)");
+            App.Logger.Log("Team kit duplication complete (" + allNew.Count + " assets)");
         }
 
         // ─── BRT Injection ──────────────────────────────────────────────────────

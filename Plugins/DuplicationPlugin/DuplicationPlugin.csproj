@@ -102,6 +102,9 @@
     <Compile Update="Windows\DuplicateFolderWindow.xaml.cs">
       <DependentUpon>DuplicateFolderWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Update="Windows\DuplicateTeamKitsWindow.xaml.cs">
+      <DependentUpon>DuplicateTeamKitsWindow.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -142,6 +145,9 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Update="Windows\DuplicateFolderWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Windows\DuplicateTeamKitsWindow.xaml">
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>

@@ -20,7 +20,7 @@ namespace DuplicationPlugin.Windows
             sourceFolder = inSourceFolder;
             sourceFolderTextBox.Text = inSourceFolder;
 
-            string sourceName = inSourceFolder.Contains('/')
+            string sourceName = inSourceFolder.IndexOf('/') >= 0
                 ? inSourceFolder.Substring(inSourceFolder.LastIndexOf('/') + 1)
                 : inSourceFolder;
             newNameTextBox.Text = sourceName;
@@ -62,7 +62,7 @@ namespace DuplicationPlugin.Windows
                 return;
             }
 
-            string sourceName = sourceFolder.Contains('/')
+            string sourceName = sourceFolder.IndexOf('/') >= 0
                 ? sourceFolder.Substring(sourceFolder.LastIndexOf('/') + 1)
                 : sourceFolder;
             if (newName.Equals(sourceName, StringComparison.OrdinalIgnoreCase))
