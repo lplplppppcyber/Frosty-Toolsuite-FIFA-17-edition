@@ -28,7 +28,7 @@ namespace FC26ProfilePlugin
                 EbxVersion = 4,
                 RequiresKey = true,
                 MustAddChunks = false,
-                EnableExecution = false,
+                EnableExecution = true,
                 ContainsEAC = true,
                 Banner = new byte[0],
                 DefaultDiffuse = "",
