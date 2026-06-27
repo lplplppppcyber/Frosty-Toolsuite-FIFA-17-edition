@@ -748,6 +748,12 @@ namespace FrostyEditor
             FrostyAssetEditor editor = null;
 
             var definition = App.PluginManager.GetAssetDefinition(asset.Type);
+            try
+            {
+                System.IO.File.AppendAllText("fc26_openasset_debug.txt",
+                    "type='" + asset.Type + "' definition=" + (definition == null ? "null" : definition.GetType().Name) + "\r\n");
+            }
+            catch { }
             if (definition != null)
             {
                 editor = definition.GetEditor(App.Logger);
