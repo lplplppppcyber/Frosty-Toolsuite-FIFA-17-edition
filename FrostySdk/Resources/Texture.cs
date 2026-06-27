@@ -92,6 +92,7 @@ namespace FrostySdk.Resources
         private uint unknown1;
         private ushort sliceCount;
         private Guid chunkId;
+        private ulong fc26Unknown5; // FC24+ 8-byte field before the chunk guid
 
         /*
            private uint[] mipOffsets = new uint[2];
@@ -163,7 +164,7 @@ namespace FrostySdk.Resources
             FirstMip = reader.ReadByte();
             // FC24+ (incl. FC26) has an 8-byte field here before the chunk guid.
             if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
-                reader.ReadULong();
+                fc26Unknown5 = reader.ReadULong();
             chunkId = reader.ReadGuid();
             for (int i = 0; i < 15; i++)
                 MipSizes[i] = reader.ReadUInt();
@@ -215,12 +216,13 @@ namespace FrostySdk.Resources
                         ProfilesLibrary.DataVersion == (int)ProfileVersion.Fifa18 || ProfilesLibrary.DataVersion == (int)ProfileVersion.NeedForSpeedPayback || ProfilesLibrary.DataVersion == (int)ProfileVersion.Madden19 ||
                         ProfilesLibrary.DataVersion == (int)ProfileVersion.Fifa19 || ProfilesLibrary.DataVersion == (int)ProfileVersion.Battlefield5 || ProfilesLibrary.DataVersion == (int)ProfileVersion.Madden20 ||
                         ProfilesLibrary.DataVersion == (int)ProfileVersion.Fifa20 || ProfilesLibrary.DataVersion == (int)ProfileVersion.NeedForSpeedHeat || ProfilesLibrary.DataVersion == (int)ProfileVersion.StarWarsSquadrons
+                        || ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26
 #if FROSTY_ALPHA || FROSTY_DEVELOPER
                     || ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesBattleforNeighborville
 #endif
                         )
                     {
-                        writer.Write(unknown1);
+                        writer.Write(unknown1); // CustomPoolId
                     }
                     writer.Write((ushort)Flags);
                 }
@@ -235,6 +237,9 @@ namespace FrostySdk.Resources
 
                 writer.Write(MipCount);
                 writer.Write(FirstMip);
+                // FC24+ (incl. FC26) 8-byte field before the chunk guid (mirror of Read).
+                if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                    writer.Write(fc26Unknown5);
                 writer.Write(chunkId);
                 for (int i = 0; i < 15; i++)
                     writer.Write(MipSizes[i]);
@@ -249,7 +254,11 @@ namespace FrostySdk.Resources
                 writer.Write(AssetNameHash);
                 if (ProfilesLibrary.DataVersion == (int)ProfileVersion.PlantsVsZombiesGardenWarfare2)
                     writer.Write(Unknown3[0]);
-                writer.WriteFixedSizedString(TextureGroup, 16);
+                // FC26 stores the texture group as a null-terminated string (mirror of Read).
+                if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26)
+                    writer.WriteNullTerminatedString(TextureGroup ?? "");
+                else
+                    writer.WriteFixedSizedString(TextureGroup, 16);
                 if (ProfilesLibrary.DataVersion == (int)ProfileVersion.Battlefield5 || ProfilesLibrary.DataVersion == (int)ProfileVersion.StarWarsSquadrons)
                     writer.Write(Unknown3[0]);
 
