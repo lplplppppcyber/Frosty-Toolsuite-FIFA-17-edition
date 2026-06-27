@@ -41,3 +41,4 @@ using static DuplicationPlugin.DuplicationTool;
 [assembly: RegisterMenuExtension(typeof(DuplicateBodyScaleMenuExtension))]
 [assembly: RegisterMenuExtension(typeof(DuplicateFolderMenuExtension))]
 [assembly: RegisterMenuExtension(typeof(DuplicateTeamKitsMenuExtension))]
+[assembly: RegisterMenuExtension(typeof(RenameFolderMenuExtension))]

@@ -76,7 +76,7 @@ namespace FrostyEditor
                 FrostyProject project = win.Project;
                 if (project.IsDirty)
                 {
-                    string name = project.DisplayName.Replace(".fbproject", "");
+                    string name = System.IO.Path.GetFileNameWithoutExtension(project.DisplayName);
                     DateTime timeStamp = DateTime.Now;
 
                     project.Filename = "Autosave/" + name + "_" + timeStamp.Day.ToString("D2") + timeStamp.Month.ToString("D2") + timeStamp.Year.ToString("D4") + "_" + timeStamp.Hour.ToString("D2") + timeStamp.Minute.ToString("D2") + timeStamp.Second.ToString("D2") + ".fbproject";
@@ -140,7 +140,7 @@ namespace FrostyEditor
                 if (ProfilesLibrary.EnableExecution)
                 {
                     discordPresence.smallImageKey = "frostyprojectsmall";
-                    discordPresence.smallImageText = (App.Current.MainWindow as MainWindow)?.Project.DisplayName.Replace(".fbproject", "");
+                    discordPresence.smallImageText = System.IO.Path.GetFileNameWithoutExtension((App.Current.MainWindow as MainWindow)?.Project.DisplayName);
                 }
                 else
                 {
@@ -208,7 +208,8 @@ namespace FrostyEditor
             if (e.Args.Length > 0)
             {
                 string arg = e.Args[0];
-                if (arg.Contains(".fbproject"))
+                if (arg.EndsWith(".fbproject", StringComparison.OrdinalIgnoreCase)
+                    || arg.EndsWith(".fifaproject", StringComparison.OrdinalIgnoreCase))
                 {
                     OpenProject = true;
                     LaunchArgs = arg;

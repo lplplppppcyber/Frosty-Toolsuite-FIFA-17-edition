@@ -363,7 +363,7 @@ namespace FrostyEditor
                 if (lastSaveIndex > Config.Get<int>("AutosaveMaxCount", 10)) // Config.Get<int>("Autosave", "MaxCount", 10)
                     lastSaveIndex = 1;
 
-                string projectName = m_project.DisplayName.Remove(m_project.DisplayName.Length - 10);
+                string projectName = System.IO.Path.GetFileNameWithoutExtension(m_project.DisplayName);
                 FileInfo fi = new FileInfo("Autosave/" + projectName + "_" + lastSaveIndex.ToString("D3") + ".fbproject");
 
                 App.Logger.Log("Initiated autosave of project to " + fi.FullName);
@@ -548,7 +548,7 @@ namespace FrostyEditor
         private void openModMenuItem_Click(object sender, RoutedEventArgs e)
         {
             bool savePrevProject = false;
-            FrostyOpenFileDialog ofd = new FrostyOpenFileDialog("Open Project", "*.fbproject (Frosty Project)|*.fbproject", "Project");
+            FrostyOpenFileDialog ofd = new FrostyOpenFileDialog("Open Project", "Project Files|*.fbproject;*.fifaproject|Frosty Project (*.fbproject)|*.fbproject|FET Project (*.fifaproject)|*.fifaproject", "Project");
 
             if (!ofd.ShowDialog())
             {
