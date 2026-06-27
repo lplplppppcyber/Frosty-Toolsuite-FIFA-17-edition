@@ -5,7 +5,6 @@ using Frosty.Core;
 using Frosty.Core.Viewport;
 using Frosty.Core.Windows;
 using FrostySdk;
-using FrostySdk.Ebx;
 using FrostySdk.IO;
 using FrostySdk.Managers;
 using System;
@@ -137,22 +136,6 @@ namespace DuplicationPlugin
                 App.Logger.Log("Failed to duplicate " + entry.Name + ": " + ex.ToString());
                 return null;
             }
-        }
-
-        private static PointerRef MakeRef(EbxAsset targetAsset)
-        {
-            EbxImportReference r = new EbxImportReference();
-            r.FileGuid = targetAsset.FileGuid;
-            r.ClassGuid = targetAsset.RootInstanceGuid;
-            return new PointerRef(r);
-        }
-
-        private static PointerRef MakeRef(EbxAsset targetAsset, Guid classGuid)
-        {
-            EbxImportReference r = new EbxImportReference();
-            r.FileGuid = targetAsset.FileGuid;
-            r.ClassGuid = classGuid;
-            return new PointerRef(r);
         }
 
         private void DuplicateTeam(FrostyTaskWindow task, string teamFolder,
@@ -323,107 +306,18 @@ namespace DuplicationPlugin
                         || newEntry.Type == "SkinnedMeshAsset")
                         continue;
 
-                    if (newEntry.Type == "MeshVariationDatabase")
-                        FixMVDB(newEntry, oldToNew);
-                    else if (newEntry.Type == "ObjectBlueprint")
-                        FixBlueprint(newEntry, oldToNew);
+                    EbxAsset asset = App.AssetManager.GetEbx(newEntry);
+                    if (EbxRefFixer.Fix(asset, oldToNew))
+                    {
+                        asset.Update();
+                        App.AssetManager.ModifyEbx(newEntry.Name, asset);
+                        App.Logger.Log("  Fixed refs: " + newEntry.Name);
+                    }
                 }
                 catch (Exception ex)
                 {
                     App.Logger.Log("Failed to fix refs in " + newEntry.Name + ": " + ex.Message);
                 }
-            }
-        }
-
-        private void FixBlueprint(EbxAssetEntry newEntry,
-            Dictionary<Guid, EbxAssetEntry> oldToNew)
-        {
-            EbxAsset ebx = App.AssetManager.GetEbx(newEntry);
-            dynamic root = ebx.RootObject;
-            dynamic entity = root.Object.Internal;
-            bool modified = false;
-
-            if (entity.Mesh.Type == PointerRefType.External)
-            {
-                Guid oldGuid = entity.Mesh.External.FileGuid;
-                if (oldToNew.ContainsKey(oldGuid))
-                {
-                    EbxAsset newMesh = App.AssetManager.GetEbx(oldToNew[oldGuid]);
-                    entity.Mesh = MakeRef(newMesh);
-                    modified = true;
-                    App.Logger.Log("  " + newEntry.Filename + ": Mesh -> " + oldToNew[oldGuid].Name);
-                }
-            }
-
-            if (modified)
-            {
-                ebx.Update();
-                App.AssetManager.ModifyEbx(newEntry.Name, ebx);
-            }
-        }
-
-        private void FixMVDB(EbxAssetEntry mvdbEntry,
-            Dictionary<Guid, EbxAssetEntry> oldToNew)
-        {
-            EbxAsset mvdbAsset = App.AssetManager.GetEbx(mvdbEntry);
-            dynamic mvdbRoot = mvdbAsset.RootObject;
-            bool modified = false;
-
-            foreach (dynamic entry in mvdbRoot.Entries)
-            {
-                if (entry.Mesh.Type != PointerRefType.External)
-                    continue;
-
-                Guid oldMeshGuid = entry.Mesh.External.FileGuid;
-                if (!oldToNew.ContainsKey(oldMeshGuid))
-                    continue;
-
-                EbxAssetEntry newMeshEntry = oldToNew[oldMeshGuid];
-                EbxAsset newMeshAsset = App.AssetManager.GetEbx(newMeshEntry);
-
-                entry.Mesh = MakeRef(newMeshAsset);
-                modified = true;
-                App.Logger.Log("  MVDB: Mesh -> " + newMeshEntry.Name);
-
-                foreach (dynamic mat in entry.Materials)
-                {
-                    if (mat.Material.Type == PointerRefType.External)
-                    {
-                        Guid matFileGuid = mat.Material.External.FileGuid;
-                        if (oldToNew.ContainsKey(matFileGuid))
-                        {
-                            Guid classGuid = mat.Material.External.ClassGuid;
-                            mat.Material = MakeRef(newMeshAsset, classGuid);
-                            modified = true;
-                        }
-                    }
-
-                    foreach (dynamic texParam in mat.TextureParameters)
-                    {
-                        if (texParam.Value.Type != PointerRefType.External)
-                            continue;
-
-                        Guid oldTexGuid = texParam.Value.External.FileGuid;
-                        if (!oldToNew.ContainsKey(oldTexGuid))
-                            continue;
-
-                        EbxAssetEntry newTexEntry = oldToNew[oldTexGuid];
-                        EbxAsset newTexAsset = App.AssetManager.GetEbx(newTexEntry);
-                        texParam.Value = MakeRef(newTexAsset);
-                        modified = true;
-
-                        string paramName = "";
-                        try { paramName = texParam.ParameterName; } catch { }
-                        App.Logger.Log("  MVDB: " + paramName + " -> " + newTexEntry.Name);
-                    }
-                }
-            }
-
-            if (modified)
-            {
-                mvdbAsset.Update();
-                App.AssetManager.ModifyEbx(mvdbEntry.Name, mvdbAsset);
-                App.Logger.Log("  Saved MVDB: " + mvdbEntry.Name);
             }
         }
     }
