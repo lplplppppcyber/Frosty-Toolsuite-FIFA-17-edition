@@ -99,6 +99,9 @@
     <Compile Update="Windows\DuplicateBodyScaleWindow.xaml.cs">
       <DependentUpon>DuplicateBodyScaleWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Update="Windows\DuplicateFolderWindow.xaml.cs">
+      <DependentUpon>DuplicateFolderWindow.xaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -136,6 +139,9 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Update="Windows\DuplicateBodyScaleWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Windows\DuplicateFolderWindow.xaml">
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>
