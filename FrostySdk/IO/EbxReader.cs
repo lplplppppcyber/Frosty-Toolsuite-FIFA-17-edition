@@ -1158,15 +1158,15 @@ namespace FrostySdk.IO
             // to the inline payload. High bit of the value marks a present value.
             if (magic == EbxVersion.Riff)
             {
-                uint value = ReadUInt();
+                uint tag = ReadUInt();
                 ReadInt();              // unk
                 long roffset = ReadLong();
                 long restorePos = Position;
                 try
                 {
-                    if ((value & 0x80000000u) == 0x80000000u)
+                    if ((tag & 0x80000000u) == 0x80000000u)
                     {
-                        EbxFieldType typeCode = (EbxFieldType)(((value & 0x7FFFFFFF) >> 5) & 0x1F);
+                        EbxFieldType typeCode = (EbxFieldType)(((tag & 0x7FFFFFFF) >> 5) & 0x1F);
                         Position += roffset - 8;
                         return new BoxedValueRef(ReadField(null, typeCode, ushort.MaxValue), typeCode);
                     }
