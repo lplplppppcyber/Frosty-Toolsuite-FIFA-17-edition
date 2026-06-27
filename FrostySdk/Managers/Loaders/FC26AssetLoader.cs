@@ -210,21 +210,28 @@ namespace FrostySdk.Managers
                                 r.ReadInt(Endian.Big);
                         }
 
-                        // Chunk guid + order (16 bytes reversed LE guid + uint32 order)
+                        // Chunk guid table: 16-byte reversed LE guid + uint32 "decodeAndOffset".
+                        // The data entries below are matched to guids by the low-24-bit "order"
+                        // field, NOT by sequential index (ported from fetsource TocReader_F21).
                         r.Position = TocHeaderSize + chunkGuidOff;
-                        Guid[] guids   = new Guid[chunkCount];
+                        Dictionary<uint, Guid> orderToGuid = new Dictionary<uint, Guid>(chunkCount);
                         for (int i = 0; i < chunkCount; i++)
                         {
                             byte[] raw = r.ReadBytes(16);
                             Array.Reverse(raw);
-                            guids[i] = new Guid(raw);
-                            r.ReadUInt(Endian.Big); // decodeAndOrder – not needed for Frosty
+                            Guid g = new Guid(raw);
+                            uint decodeAndOffset = r.ReadUInt(Endian.Big);
+                            uint order = decodeAndOffset & 0xFFFFFF;
+                            orderToGuid[order] = g;
                         }
 
                         // Chunk CAS data: skip byte | patch bool | fnv1 uint32 | extra byte | cas | offset | size
-                        r.Position = TocHeaderSize + dataOffset;
+                        long dataBase = TocHeaderSize + dataOffset;
+                        r.Position = dataBase;
                         for (int i = 0; i < chunkCount; i++)
                         {
+                            uint key = (uint)((r.Position - dataBase) / 4);
+
                             r.ReadByte();
                             bool inPatch = r.ReadBoolean();
                             uint fnv1    = r.ReadUInt(Endian.Big);
@@ -233,24 +240,17 @@ namespace FrostySdk.Managers
                             uint off     = r.ReadUInt(Endian.Big);
                             uint size    = r.ReadUInt(Endian.Big);
 
+                            Guid id;
+                            if (!orderToGuid.TryGetValue(key, out id))
+                                continue;
+
                             int catIdx = parent.fs.GetCatalogIndexFromFNV1(fnv1);
                             if (catIdx < 0)
-                            {
-                                try
-                                {
-                                    if (!System.IO.File.Exists("fc26_tocchunk_debug.txt")
-                                        || new System.IO.FileInfo("fc26_tocchunk_debug.txt").Length < 64 * 1024)
-                                        System.IO.File.AppendAllText("fc26_tocchunk_debug.txt",
-                                            "DROPPED id=" + guids[i] + " fnv1=0x" + fnv1.ToString("X8")
-                                            + " cas=" + cas + " size=" + size + "\r\n");
-                                }
-                                catch { }
                                 continue;
-                            }
 
                             tocChunks.Add(new TocChunkMeta
                             {
-                                Id           = guids[i],
+                                Id           = id,
                                 CatalogIndex = catIdx,
                                 CasIndex     = cas,
                                 InPatch      = inPatch,
