@@ -666,7 +666,7 @@ namespace DuplicationPlugin
                     }
                     catch (Exception e)
                     {
-                        App.Logger.Log($"Failed to duplicate {entry.Name}");
+                        App.Logger.Log($"Failed to duplicate {entry.Name}: {e}");
                     }
                 });
 

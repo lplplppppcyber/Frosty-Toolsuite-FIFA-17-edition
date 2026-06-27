@@ -105,7 +105,7 @@ namespace DuplicationPlugin
             }
             catch (Exception ex)
             {
-                App.Logger.Log("Failed to duplicate " + entry.Name + ": " + ex.Message);
+                App.Logger.Log("Failed to duplicate " + entry.Name + ": " + ex.ToString());
                 return null;
             }
         }
