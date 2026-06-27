@@ -541,10 +541,13 @@ namespace FrostySdk.IO
 
         public static EbxReader CreateReader(Stream inStream, FileSystem fs = null, bool patched = false)
         {
-            // FC26 uses RIFF EBX, which is only implemented in EbxReaderV2. Its profile
-            // EbxVersion is even (4), so force V2 here regardless of the odd/even bit.
+            // FC26 uses RIFF EBX and requires EbxReaderV2, but only when loading from disk
+            // (fs != null). When fs is null the stream is a legacy-format round-trip buffer
+            // written by EbxWriter; the base EbxReader handles that format correctly via
+            // name-based type lookup, while EbxReaderV2 would misread the structured class
+            // entries as GUIDs and fail to resolve any type.
             bool useV2 = (ProfilesLibrary.EbxVersion & 1) != 0
-                || ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26;
+                || (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26 && fs != null);
             return useV2 ? new EbxReaderV2(inStream, fs, patched) : new EbxReader(inStream);
         }
 
