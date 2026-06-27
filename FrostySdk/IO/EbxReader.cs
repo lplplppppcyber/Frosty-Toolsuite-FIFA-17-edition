@@ -971,7 +971,7 @@ namespace FrostySdk.IO
 
         internal virtual Type GetType(EbxClass classType) => TypeLibrary.GetType(classType.Name);
 
-        internal object ReadField(EbxClass? parentClass, EbxFieldType fieldType, ushort fieldClassRef, bool dontRefCount = false)
+        internal virtual object ReadField(EbxClass? parentClass, EbxFieldType fieldType, ushort fieldClassRef, bool dontRefCount = false)
         {
             switch (fieldType)
             {
@@ -1132,6 +1132,10 @@ namespace FrostySdk.IO
 
         internal TypeRef ReadTypeRef()
         {
+            // RIFF stores a type-info index rather than a string offset.
+            if (magic == EbxVersion.Riff)
+                return new TypeRef(ReadUInt().ToString());
+
             string str = ReadString(ReadUInt());
             Position += 4;
 
@@ -1150,6 +1154,30 @@ namespace FrostySdk.IO
 
         internal BoxedValueRef ReadBoxedValueRef()
         {
+            // RIFF boxed values: 4-byte type-tagged value, 4-byte unk, 8-byte relative offset
+            // to the inline payload. High bit of the value marks a present value.
+            if (magic == EbxVersion.Riff)
+            {
+                uint value = ReadUInt();
+                ReadInt();              // unk
+                long roffset = ReadLong();
+                long restorePos = Position;
+                try
+                {
+                    if ((value & 0x80000000u) == 0x80000000u)
+                    {
+                        EbxFieldType typeCode = (EbxFieldType)(((value & 0x7FFFFFFF) >> 5) & 0x1F);
+                        Position += roffset - 8;
+                        return new BoxedValueRef(ReadField(null, typeCode, ushort.MaxValue), typeCode);
+                    }
+                    return new BoxedValueRef();
+                }
+                finally
+                {
+                    Position = restorePos;
+                }
+            }
+
             int index = ReadInt();
             Position += 12;
 
@@ -1839,6 +1867,34 @@ namespace FrostySdk.IO
                 }
             }
             return classType ?? default(EbxClass);
+        }
+
+        // RIFF pointers are encoded differently from legacy EBX: low bit set => import
+        // (index = value >> 1); otherwise the value is a relative offset to the target data
+        // container, resolved by matching dataContainerOffsets.
+        internal override object ReadField(EbxClass? parentClass, EbxFieldType fieldType, ushort fieldClassRef, bool dontRefCount = false)
+        {
+            if (magic == EbxVersion.Riff && fieldType == EbxFieldType.Pointer)
+            {
+                int num = ReadInt();
+                if (num == 0)
+                    return new PointerRef();
+
+                if ((num & 1) == 1)
+                    return new PointerRef(imports[num >> 1]);
+
+                long offset = Position - 4 + num - riffPayloadOffset;
+                int dc = dataContainerOffsets.IndexOf((uint)offset);
+                if (dc == -1)
+                    return new PointerRef();
+
+                if (!dontRefCount)
+                    refCounts[dc]++;
+
+                return new PointerRef(objects[dc]);
+            }
+
+            return base.ReadField(parentClass, fieldType, fieldClassRef, dontRefCount);
         }
 
         internal override PropertyInfo GetProperty(Type objType, EbxField field)
