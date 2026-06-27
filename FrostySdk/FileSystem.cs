@@ -664,27 +664,30 @@ namespace FrostySdk
                                 superBundles.Add(lower);
                         }
                     }
+                }
 
-                    DbObject splitSbs = installChunk.GetValue<DbObject>("splitSuperBundles");
-                    if (splitSbs != null)
+                // Split superbundles/tocs are declared per install chunk and must be added
+                // even when the catalog already exists (matches fetsource). These split TOCs
+                // are where install-package content chunks (e.g. full texture data) live.
+                DbObject splitSbs = installChunk.GetValue<DbObject>("splitSuperBundles");
+                if (splitSbs != null)
+                {
+                    foreach (DbObject sbc in splitSbs)
                     {
-                        foreach (DbObject sbc in splitSbs)
-                        {
-                            string sbName = sbc.GetValue<string>("superBundle").ToLower();
-                            if (!info.SuperBundles.ContainsKey(sbName))
-                                info.SuperBundles[sbName] = true;
-                        }
+                        string sbName = sbc.GetValue<string>("superBundle").ToLower();
+                        if (!info.SuperBundles.ContainsKey(sbName))
+                            info.SuperBundles[sbName] = true;
                     }
+                }
 
-                    DbObject splitTocs = installChunk.GetValue<DbObject>("splitTocs");
-                    if (splitTocs != null)
+                DbObject splitTocs = installChunk.GetValue<DbObject>("splitTocs");
+                if (splitTocs != null)
+                {
+                    foreach (DbObject sbc in splitTocs)
                     {
-                        foreach (DbObject sbc in splitTocs)
-                        {
-                            string sbName = "win32/" + sbc.GetValue<string>("superbundle").ToLower();
-                            if (!info.SuperBundles.ContainsKey(sbName))
-                                info.SuperBundles[sbName] = true;
-                        }
+                        string sbName = "win32/" + sbc.GetValue<string>("superbundle").ToLower();
+                        if (!info.SuperBundles.ContainsKey(sbName))
+                            info.SuperBundles[sbName] = true;
                     }
                 }
 
