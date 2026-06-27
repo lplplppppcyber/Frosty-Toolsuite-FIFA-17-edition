@@ -130,7 +130,18 @@ namespace TexturePlugin
                     textureAsset = App.AssetManager.GetResAs<Texture>(App.AssetManager.GetResEntry(resRid));
                     try
                     {
-                        System.IO.File.WriteAllText("fc26_texture_debug.txt",
+                        var ce = App.AssetManager.GetChunkEntry(textureAsset.ChunkId);
+                        string chunkInfo = ce == null ? "chunkEntry=null"
+                            : "chunkEntry: Size=" + ce.Size + " LogicalOffset=" + ce.LogicalOffset
+                              + " LogicalSize=" + ce.LogicalSize + " RangeStart=" + ce.RangeStart
+                              + " RangeEnd=" + ce.RangeEnd + " Location=" + ce.Location
+                              + " IsTocChunk=" + ce.IsTocChunk + " Bundles=" + ce.Bundles.Count;
+                        System.IO.File.WriteAllText("fc26_texture_debug.txt", chunkInfo + "\r\n");
+                    }
+                    catch { }
+                    try
+                    {
+                        System.IO.File.AppendAllText("fc26_texture_debug.txt",
                             "resRid=" + resRid + "\r\n" +
                             "Type=" + textureAsset.Type + "\r\n" +
                             "PixelFormat=" + textureAsset.PixelFormat + "\r\n" +
