@@ -160,31 +160,40 @@ namespace FsLocalizationPlugin
 
             foreach (EbxAssetEntry entry in App.AssetManager.EnumerateEbx("LocalizationAsset"))
             {
-                // read master localization asset
-                dynamic localizationAsset = App.AssetManager.GetEbx(entry).RootObject;
-
-                // iterate through localized texts
-                foreach (PointerRef pointer in localizationAsset.LocalizedTexts)
+                // read master localization asset. Guard against EBX parse failures so a single
+                // unreadable localization asset can't abort editor startup (e.g. FC26 assets
+                // whose RIFF parse still has edge cases).
+                try
                 {
-                    EbxAssetEntry textEntry = App.AssetManager.GetEbxEntry(pointer.External.FileGuid);
-                    if (textEntry == null)
-                        continue;
+                    dynamic localizationAsset = App.AssetManager.GetEbx(entry).RootObject;
 
-                    // read localized text asset
-                    loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textEntry);
-                    dynamic localizedText = loadedDatabase.RootObject;
-
-                    // check for english
-                    if (localizedText.Language.ToString() == language)
+                    // iterate through localized texts
+                    foreach (PointerRef pointer in localizationAsset.LocalizedTexts)
                     {
-                        textEntry.AssetModified += (o, e) =>
+                        EbxAssetEntry textEntry = App.AssetManager.GetEbxEntry(pointer.External.FileGuid);
+                        if (textEntry == null)
+                            continue;
+
+                        // read localized text asset
+                        loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textEntry);
+                        dynamic localizedText = loadedDatabase.RootObject;
+
+                        // check for english
+                        if (localizedText.Language.ToString() == language)
                         {
-                            loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textEntry);
-                        };
-                        binaryChunk = localizedText.BinaryChunk;
-                        histogram = localizedText.HistogramChunk;
-                        break;
+                            textEntry.AssetModified += (o, e) =>
+                            {
+                                loadedDatabase = App.AssetManager.GetEbxAs<FsLocalizationAsset>(textEntry);
+                            };
+                            binaryChunk = localizedText.BinaryChunk;
+                            histogram = localizedText.HistogramChunk;
+                            break;
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    try { System.IO.File.AppendAllText("fc26_localization_debug.txt", entry.Name + ": " + ex + "\r\n\r\n"); } catch { }
                 }
             }
 
