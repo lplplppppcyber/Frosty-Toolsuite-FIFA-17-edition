@@ -128,6 +128,21 @@ namespace TexturePlugin
                 try 
                 {
                     textureAsset = App.AssetManager.GetResAs<Texture>(App.AssetManager.GetResEntry(resRid));
+                    try
+                    {
+                        System.IO.File.WriteAllText("fc26_texture_debug.txt",
+                            "resRid=" + resRid + "\r\n" +
+                            "Type=" + textureAsset.Type + "\r\n" +
+                            "PixelFormat=" + textureAsset.PixelFormat + "\r\n" +
+                            "Width=" + textureAsset.Width + " Height=" + textureAsset.Height +
+                            " Depth=" + textureAsset.Depth + " SliceCount=" + textureAsset.SliceCount + "\r\n" +
+                            "MipCount=" + textureAsset.MipCount + " FirstMip=" + textureAsset.FirstMip + "\r\n" +
+                            "ChunkId=" + textureAsset.ChunkId + " ChunkSize=" + textureAsset.ChunkSize + "\r\n" +
+                            "DataLen=" + (textureAsset.Data == null ? "null" : textureAsset.Data.Length.ToString()) + "\r\n" +
+                            "Flags=" + textureAsset.Flags + " TextureGroup=" + textureAsset.TextureGroup + "\r\n" +
+                            "MipSizes[0..3]=" + textureAsset.MipSizes[0] + "," + textureAsset.MipSizes[1] + "," + textureAsset.MipSizes[2] + "," + textureAsset.MipSizes[3]);
+                    }
+                    catch { }
                     textureIsSRGB = textureAsset.PixelFormat.Contains("SRGB") || ((textureAsset.Flags & TextureFlags.SrgbGamma) != 0);
                     renderer.Screen = new TextureScreen(textureAsset);
                 }
