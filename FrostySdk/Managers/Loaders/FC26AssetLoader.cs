@@ -235,7 +235,18 @@ namespace FrostySdk.Managers
 
                             int catIdx = parent.fs.GetCatalogIndexFromFNV1(fnv1);
                             if (catIdx < 0)
+                            {
+                                try
+                                {
+                                    if (!System.IO.File.Exists("fc26_tocchunk_debug.txt")
+                                        || new System.IO.FileInfo("fc26_tocchunk_debug.txt").Length < 64 * 1024)
+                                        System.IO.File.AppendAllText("fc26_tocchunk_debug.txt",
+                                            "DROPPED id=" + guids[i] + " fnv1=0x" + fnv1.ToString("X8")
+                                            + " cas=" + cas + " size=" + size + "\r\n");
+                                }
+                                catch { }
                                 continue;
+                            }
 
                             tocChunks.Add(new TocChunkMeta
                             {
