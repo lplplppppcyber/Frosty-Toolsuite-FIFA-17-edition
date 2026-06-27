@@ -193,6 +193,39 @@ namespace FrostySdk.Resources
             if (ProfilesLibrary.DataVersion == (int)ProfileVersion.Battlefield5 || ProfilesLibrary.DataVersion == (int)ProfileVersion.StarWarsSquadrons)
                 Unknown3[0] = reader.ReadUInt();
             Data = am.GetChunk(am.GetChunkEntry(chunkId));
+
+            // FC26 streams the high-resolution mips separately; the bundled chunk only holds
+            // the smaller tail mips. If the available data is shorter than the full mip chain,
+            // drop the missing leading mips so the texture renders cleanly at the highest
+            // resolution actually present (instead of decoding the residual as mip 0 garbage).
+            if (ProfilesLibrary.DataVersion == (int)ProfileVersion.FC26 && Data != null)
+            {
+                long avail = Data.Length;
+                long total = 0;
+                for (int i = 0; i < MipCount && i < 15; i++)
+                    total += MipSizes[i];
+
+                if (total > avail && MipCount > 1)
+                {
+                    int drop = 0;
+                    long tail = total;
+                    while (drop < MipCount - 1 && tail > avail)
+                    {
+                        tail -= MipSizes[drop];
+                        drop++;
+                    }
+
+                    if (drop > 0)
+                    {
+                        Width  = (ushort)Math.Max(1, Width >> drop);
+                        Height = (ushort)Math.Max(1, Height >> drop);
+                        for (int i = 0; i + drop < 15; i++)
+                            MipSizes[i] = (i + drop < MipCount) ? MipSizes[i + drop] : 0;
+                        MipCount = (byte)(MipCount - drop);
+                        FirstMip = 0;
+                    }
+                }
+            }
         }
 
         public override byte[] SaveBytes()
