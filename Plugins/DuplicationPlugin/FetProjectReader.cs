@@ -59,9 +59,21 @@ namespace DuplicationPlugin
                 ulong magic = r.ReadULong();
                 if (magic != FetMagic)
                 {
-                    // Log the actual bytes to help diagnose unknown formats.
                     App.Logger.Log("FET import: unexpected magic 0x{0:X16} (first4=0x{1:X8}) in {2}",
                         magic, first4, System.IO.Path.GetFileName(filename));
+
+                    // "FETP" magic (0x03060F0250544546) = newer FET format used in FC 25/26.
+                    // Bytes 0-3 spell "FETP" in ASCII (little-endian uint = 0x50544546).
+                    const uint FetpSignature = 0x50544546u; // "FETP"
+                    if (first4 == FetpSignature)
+                    {
+                        throw new InvalidDataException(
+                            "This .fifaproject file was created by a newer version of FIFA Editor Tool (FC 25 / FC 26).\n\n" +
+                            "The \"FETP\" format used by newer FET versions is not supported by this importer.\n\n" +
+                            "This importer only supports the classic \"FIFATOOL\" format produced by FET for FIFA 17 – FIFA 23. " +
+                            "Additionally, assets from FC 25/26 are not compatible with FIFA 17.");
+                    }
+
                     throw new InvalidDataException(string.Format(
                         "Not a recognised FET .fifaproject file (magic=0x{0:X16}).", magic));
                 }
