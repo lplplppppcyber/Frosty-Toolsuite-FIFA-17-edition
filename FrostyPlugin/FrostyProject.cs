@@ -1012,8 +1012,18 @@ namespace Frosty.Core
             Dictionary<int, AssetEntry> h32map = new Dictionary<int, AssetEntry>();
 
             DbObject project = null;
-            using (DbReader reader = new DbReader(new FileStream(inFilename, FileMode.Open, FileAccess.Read), null))
-                project = reader.ReadDbObject();
+            try
+            {
+                using (DbReader reader = new DbReader(new FileStream(inFilename, FileMode.Open, FileAccess.Read), null))
+                    project = reader.ReadDbObject();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (project == null)
+                return false;
 
             uint version = project.GetValue<uint>("version");
             if (version > FormatVersion)
