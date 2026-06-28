@@ -32,14 +32,39 @@ namespace DuplicationPlugin
             public string GameName;
         }
 
+        // Some FET project files have a 556-byte obfuscation preamble.
+        // The preamble starts with one of two 4-byte signatures.
+        private const uint ObfMagic1 = 30331136u;  // 0x01CE2C00
+        private const uint ObfMagic2 = 63885568u;  // 0x03CE2C00
+        private const int ObfHeaderSize = 556;
+
         public static FetReadResult Read(string filename)
         {
             using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
             using (NativeReader r = new NativeReader(fs))
             {
+                // Check for obfuscation preamble (556 bytes) before the real FET magic.
+                uint first4 = r.ReadUInt();
+                long bodyOffset = 0;
+                if (first4 == ObfMagic1 || first4 == ObfMagic2)
+                {
+                    bodyOffset = ObfHeaderSize;
+                    r.Position = bodyOffset;
+                }
+                else
+                {
+                    r.Position = 0;
+                }
+
                 ulong magic = r.ReadULong();
                 if (magic != FetMagic)
-                    throw new InvalidDataException("Not a FET .fifaproject file.");
+                {
+                    // Log the actual bytes to help diagnose unknown formats.
+                    App.Logger.Log("FET import: unexpected magic 0x{0:X16} (first4=0x{1:X8}) in {2}",
+                        magic, first4, System.IO.Path.GetFileName(filename));
+                    throw new InvalidDataException(string.Format(
+                        "Not a recognised FET .fifaproject file (magic=0x{0:X16}).", magic));
+                }
 
                 uint version = r.ReadUInt();
 
