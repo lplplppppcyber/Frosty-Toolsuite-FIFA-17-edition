@@ -632,7 +632,14 @@ namespace FrostyEditor
                 newProject = new FrostyProject();
                 if (!newProject.Load(filename))
                 {
-                    if (ProfilesLibrary.DataVersion != newProject.gameVersion) //user loaded project for different game
+                    if (filename.EndsWith(".fifaproject", StringComparison.OrdinalIgnoreCase))
+                    {
+                        App.Logger.LogWarning("Cannot open {0}: FIFA Editor Tool (.fifaproject) projects use an incompatible binary format and cannot be loaded in Frosty Editor.", filename);
+                        FrostyMessageBox.Show(
+                            "This file was created by FIFA Editor Tool (FET) and uses a different binary format.\n\nFET .fifaproject files cannot be loaded directly in Frosty Editor.",
+                            "Incompatible Project Format");
+                    }
+                    else if (ProfilesLibrary.DataVersion != newProject.gameVersion) //user loaded project for different game
                     {
                         App.Logger.LogWarning("Project {0} is not for {1}.", filename, ProfilesLibrary.DisplayName);
                     }

@@ -77,6 +77,11 @@ namespace Frosty.Core
             modSettings.ClearDirtyFlag();
         }
 
+        // FET (FIFA Editor Tool) project files begin with "FIFATOOL" in little-endian.
+        // Their binary format is completely different from Frosty's and must not be
+        // passed to LegacyLoad(), which would crash trying to parse them as DbObject.
+        private const ulong FetMagic = 5498700893333637446uL;
+
         public bool Load(string inFilename)
         {
             filename = inFilename;
@@ -88,6 +93,10 @@ namespace Frosty.Core
                 if (magic == Magic)
                     return InternalLoad(reader);
             }
+
+            if (magic == FetMagic)
+                return false; // FIFA Editor Tool project — incompatible format
+
             return LegacyLoad(inFilename);
         }
 
